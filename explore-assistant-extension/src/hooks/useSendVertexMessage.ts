@@ -1,15 +1,19 @@
 import { ExtensionContext } from '@looker/extension-sdk-react'
 import { useCallback, useContext } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
+import { useSelector } from 'react-redux'
+import CryptoJS from 'crypto-js'
 import { RootState } from '../store'
-import { ErrorBoundary, useErrorBoundary } from 'react-error-boundary'
-import { AssistantState, setVertexTestSuccessful } from '../slices/assistantSlice'
+import process from 'process'
+import { useErrorBoundary } from 'react-error-boundary'
+import { AssistantState } from '../slices/assistantSlice'
 
 import looker_filter_doc from '../documents/looker_filter_doc.md'
 import looker_visualization_doc from '../documents/looker_visualization_doc.md'
-import looker_filters_interval_tf from '../documents/looker_filters_interval_tf'
+import looker_filters_interval_tf from '../documents/looker_filters_interval_tf.md'
+import looker_pivots_url_parameters_doc from '../documents/looker_pivots_url_parameters_doc.md'
 
 import { ModelParameters } from '../utils/VertexHelper'
+import { BigQueryHelper } from '../utils/BigQueryHelper'
 import { ExploreParams } from '../slices/assistantSlice'
 import { ExploreFilterValidator, FieldType } from '../utils/ExploreFilterHelper'
 
@@ -51,186 +55,78 @@ function formatRow(field: {
 
 const useSendVertexMessage = () => {
   const { showBoundary } = useErrorBoundary()
-  const dispatch = useDispatch()
 
   // cloud function
+  const VERTEX_AI_ENDPOINT = process.env.VERTEX_AI_ENDPOINT || ''
+  const VERTEX_CF_AUTH_TOKEN = process.env.VERTEX_CF_AUTH_TOKEN || ''
 
   // bigquery
+  const VERTEX_BIGQUERY_LOOKER_CONNECTION_NAME =
+    process.env.VERTEX_BIGQUERY_LOOKER_CONNECTION_NAME || ''
+  const VERTEX_BIGQUERY_MODEL_ID = process.env.VERTEX_BIGQUERY_MODEL_ID || ''
 
-  const { core40SDK, extensionSDK, lookerHostData } = useContext(ExtensionContext)
-
+  const { core40SDK } = useContext(ExtensionContext)
   const { settings, examples, currentExplore } = useSelector(
     (state: RootState) => state.assistant as AssistantState,
   )
-  
-  // showBoundary(settings)
-  const VERTEX_BIGQUERY_LOOKER_CONNECTION_NAME =
-    settings['vertex_bigquery_looker_connection_name']?.value || ''
-  const VERTEX_BIGQUERY_MODEL_ID = settings['vertex_bigquery_model_id']?.value || ''
-  const AI_ENDPOINT = settings['ai_endpoint']?.value as string || '' as string
-  const ai_cf_auth_token = settings['ai_cf_auth_token']?.value as string || '' as string
-
-
 
   const currentExploreKey = currentExplore.exploreKey
   const exploreRefinementExamples =
     examples.exploreRefinementExamples[currentExploreKey]
 
-  const modelName = lookerHostData?.extensionId.split('::')[0]
-
   const vertexBigQuery = async (
     contents: string,
     parameters: ModelParameters,
   ) => {
-    try {     // Escape special characters
-      const sanitizedContents = `"${contents
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"')
-        .replace(/\n/g, ' ') 
-        .replace(/\r/g, ' ') 
-        .replace(/\t/g, ' ') 
-        .replace(/,/g, ' ')  }"`
-      const query = await core40SDK.ok(
-        core40SDK.run_inline_query({
-          result_format: 'json',
-          body: {
-            model: modelName || "explore_assistant",
-            view: "explore_assistant",
-            filters: {
-              'explore_assistant.prompt': sanitizedContents,
-            },
-            fields: [`explore_assistant.generated_content`],
-          }
-        })
+    const createSQLQuery = await core40SDK.ok(
+      core40SDK.create_sql_query({
+        connection_name: VERTEX_BIGQUERY_LOOKER_CONNECTION_NAME,
+        sql: BigQueryHelper.generateSQL(
+          VERTEX_BIGQUERY_MODEL_ID,
+          contents,
+          parameters,
+        ),
+      }),
+    )
+
+    if (createSQLQuery.slug) {
+      const runSQLQuery: any = await core40SDK.ok(
+        core40SDK.run_sql_query(createSQLQuery.slug, 'json'),
       )
+      const exploreData = await runSQLQuery[0]['generated_content']
 
-      if (query === undefined) {
-        return ''
-      }
-      return JSON.stringify(query)
-    } catch (error: any) {
-      if (error.name === 'LookerSDKError' || error.message === 'Model Not Found') {
-        console.error('Error running query:', error.message)
-        return ''
-      }
-      showBoundary(error)
-      throw new Error('error')
-    }
-  }
-  const cloudFunction = async (
-    contents: string,
-    parameters: ModelParameters,
-  ) => {
-  
-    const body = JSON.stringify({
-      product: "mfa",
-      prompt: contents,
-      confirmation: "",
-      chat_session_id: "some_chat_session_id",
-      flow_id: "some_flow_id",
-      user: {
-        vanity_host: "sat2016h.sat.realpage.com",
-        company_id: "some_company_id",
-        property_id: "some_property_id",
-        user_id: "some_user_id",
-      },
-    })
-  
-    try {
-      console.log('Sending request to AI Function with body:', body)
-      const response = await extensionSDK.serverProxy(AI_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer a3cf28da93a341d59ceba9d9cd7a99d1`,
-        },
-        body: body,
-      })
-      console.log('Response from serverProxy:', response)
-  
-      if (response.status === 401) {
-        throw new Error('Unauthorized: Failed to authenticate with improperly formatted auth header')
-      }
-  
-      if (response.ok) {
-        const responseData = await response.body
-        console.log('Response data:', responseData)
-        
-        // Parse the response and extract chat_response
-        try {
-          const parsedResponse = typeof responseData === 'string' ? JSON.parse(responseData) : responseData
-          return parsedResponse.chat_response || `Error: No chat response found`
-        } catch (error) {
-          console.error('Error parsing response:', error)
-          return `Error: Invalid response format`
-        }
-      } else {
-        console.error('Error response from serverProxy:', response.statusText)
-        return `Error: ${response.statusText}`
-      }
-    } catch (error) {
-      console.error('Error sending request to AI Function:', error)
-      throw error
+      // clean up the data by removing backticks
+      const cleanExploreData = exploreData
+        .replace(/```json/g, '')
+        .replace(/```/g, '')
+        .trim()
+
+      return cleanExploreData
     }
   }
 
-  const cloudFunctionWithContext = async (
+  const vertexCloudFunction = async (
     contents: string,
     parameters: ModelParameters,
-    sharedContext: object,
   ) => {
-
     const body = JSON.stringify({
-      product: "mfa",
-      prompt: contents,
-      confirmation: "",
-      chat_session_id: "some_chat_session_id",
-      flow_id: "some_flow_id",
-      user: {
-        vanity_host: "sat2016h.sat.realpage.com",
-        company_id: "some_company_id",
-        property_id: "some_property_id",
-        user_id: "some_user_id",
-      },
-      product_info: sharedContext,
+      contents: contents,
+      parameters: parameters,
     })
 
-    try {
-      console.log('Sending request to AI Function with context and body:', body)
-      const response = await extensionSDK.serverProxy(AI_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${ai_cf_auth_token}`,
-        },
-        body: body,
-      })
-      console.log('Response from serverProxy with context:', response)
+    const signature = CryptoJS.HmacSHA256(body, VERTEX_CF_AUTH_TOKEN).toString()
 
-      if (response.status === 401) {
-        throw new Error('Unauthorized: Failed to authenticate with improperly formatted auth header')
-      }
+    const responseData = await fetch(VERTEX_AI_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Signature': signature,
+      },
 
-      if (response.ok) {
-        const responseData = await response.body
-        console.log('Response data with context:', responseData)
-        
-        // Parse the response and extract chat_response
-        try {
-          const parsedResponse = typeof responseData === 'string' ? JSON.parse(responseData) : responseData
-          return parsedResponse.chat_response || `Error: No chat response found`
-        } catch (error) {
-          console.error('Error parsing response with context:', error)
-          return `Error: Invalid response format`
-        }
-      } else {
-        console.error('Error response from serverProxy with context:', response.statusText)
-        return `Error: ${response.statusText}`
-      }
-    } catch (error) {
-      console.error('Error sending request to AI Function with context:', error)
-      throw error
-    }
+      body: body,
+    })
+    const response = await responseData.text()
+    return response.trim()
   }
 
   const summarizePrompts = useCallback(
@@ -287,6 +183,7 @@ ${exploreRefinementExamples &&
     }
     let exampleText = ''
     if (exploreGenerationExamples && exploreGenerationExamples.length > 0) {
+      console.log("Line",exploreGenerationExamples)
       exampleText = exploreGenerationExamples.map((item) => `input: "${item.input}" ; output: ${JSON.stringify(parseLookerURL(item.output))}`).join('\n')
     }
     return `
@@ -297,6 +194,29 @@ ${exploreRefinementExamples &&
        ${looker_filters_interval_tf}   
       Here is general documentation on visualizations:
        ${looker_visualization_doc}
+      Here is general documentation on Looker JSON fields and pivots
+       ${looker_pivots_url_parameters_doc}
+             
+      ## Format of query object
+      
+      | Field              | Type   | Description                                                                                                                                                                                                                                                                          |
+      |--------------------|--------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+      | model              | string | Model                                                                                                                                                                                                                                                                                |
+      | view               | string | Explore Name                                                                                                                                                                                                                                                                         |
+      | fields             | string[] | Fields                                                                                                                                                                                                                                                                                |
+      | pivots             | string[] | Pivots                                                                                                                                                                                                                                                                                |
+      | fill_fields        | string[] | Fill Fields                                                                                                                                                                                                                                                                           |
+      | filters            | object | Filters                                                                                                                                                                                                                                                                               |
+      | filter_expression  | string | Filter Expression                                                                                                                                                                                                                                                                     |
+      | sorts              | string[] | Sorts                                                                                                                                                                                                                                                                                 |
+      | limit              | string | Limit                                                                                                                                                                                                                                                                                 |
+      | column_limit       | string | Column Limit                                                                                                                                                                                                                                                                          |
+      | total              | boolean | Total                                                                                                                                                                                                                                                                                 |
+      | row_total          | string | Raw Total                                                                                                                                                                                                                                                                             |
+      | subtotals          | string[] | Subtotals                                                                                                                                                                                                                                                                             |
+      | vis_config         | object | Visualization configuration properties. These properties are typically opaque and differ based on the type of visualization used. There is no specified set of allowed keys. The values can be any type supported by JSON. A "type" key with a string value is often present, and is used by Looker to determine which visualization to present. Visualizations ignore unknown vis_config properties. |
+      | filter_config      | object | The filter_config represents the state of the filter UI on the explore page for a given query. When running a query via the Looker UI, this parameter takes precedence over "filters". When creating a query or modifying an existing query, "filter_config" should be set to null. Setting it to any other value could cause unexpected filtering behavior. The format should be considered opaque. |
+          
       # End Documentation
       
            
@@ -326,49 +246,6 @@ ${exploreRefinementExamples &&
       # End Examples
       
   `}
-
-  interface ShadowContext {
-    documentation: {
-      filters: string,
-      intervals_timeframes: string,
-      visualizations: string,
-    },
-    metadata: {
-      model: string,
-      explore: string,
-      dimensions: string[],
-      measures: string[],
-    },
-    examples: string,
-    prompt: string,
-  }
-
-  const generateSharedContextForShadow = (prompt: string, dimensions: any[], measures: any[], exploreGenerationExamples: any[]): ShadowContext | undefined => {
-    if (!dimensions.length || !measures.length) {
-      showBoundary(new Error('Dimensions or measures are not defined'))
-      return 
-    }
-    let exampleText = ''
-    if (exploreGenerationExamples && exploreGenerationExamples.length > 0) {
-      exampleText = exploreGenerationExamples.map((item) => `input: "${item.input}" ; output: ${JSON.stringify(parseLookerURL(item.output))}`).join('\n')
-    }
-    return {
-      documentation: {
-        filters: looker_filter_doc,
-        intervals_timeframes: looker_filters_interval_tf,
-        visualizations: looker_visualization_doc,
-      },
-      metadata: {
-        model: currentExplore.modelName,
-        explore: currentExplore.exploreId,
-        dimensions: dimensions.map(formatRow),
-        measures: measures.map(formatRow),
-      },
-      examples: exampleText,
-      prompt: prompt,
-    }
-  }
-
 
   const isSummarizationPrompt = async (prompt: string) => {
     const contents = `
@@ -475,6 +352,7 @@ ${exploreRefinementExamples &&
   
   const parseLookerURL = (url: string): { [key: string]: any } => {
     // Split URL and extract model & explore
+    console.log("Line 331",url)
     const urlSplit = url.split("?");
     let model = ""
     let explore = ""
@@ -577,22 +455,22 @@ ${exploreRefinementExamples &&
 
       const filterResponseInitial = await sendMessage(filterContents, {})
 
-      // check the response
-      const filterContentsCheck =
-        filterContents +
-        `
+      // // check the response
+      // const filterContentsCheck =
+      //   filterContents +
+      //   `
   
-           # Output
+      //      # Output
      
-           ${filterResponseInitial}
+      //      ${filterResponseInitial}
      
-           # Instructions
+      //      # Instructions
      
-           Verify the output, make changes and return the JSON
+      //      Verify the output, make changes and return the JSON
      
-           `
-      const filterResponseCheck = await sendMessage(filterContentsCheck, {})
-      const filterResponseCheckJSON = parseJSONResponse(filterResponseCheck)
+      //      `
+      // const filterResponseCheck = await sendMessage(filterContentsCheck, {})
+      const filterResponseCheckJSON = parseJSONResponse(filterResponseInitial)
 
       // Ensure filterResponseCheckJSON is an array
       const filterResponseArray = Array.isArray(filterResponseCheckJSON) ? filterResponseCheckJSON : []
@@ -634,7 +512,7 @@ ${exploreRefinementExamples &&
           filterResponseJSON[filter.field_id] = []
         }
         // Push the filter_expression into the array
-        filterResponseJSON[filter.field_id].push(filter.filter_expression)
+        filterResponseJSON[filter.field_id].push(filter.filter_expression?.replace('+', ' '))
       })
 
       console.log('filterResponseInitial', filterResponseInitial)
@@ -741,7 +619,6 @@ ${exploreRefinementExamples &&
     [currentExplore],
   )
 
-  let sharedContextforShadow = {}
   const generateExploreParams = useCallback(
     async (
       prompt: string,
@@ -749,7 +626,6 @@ ${exploreRefinementExamples &&
       measures: any[],
       exploreGenerationExamples: any[],
     ) => {
-      sharedContextforShadow = generateSharedContextForShadow(prompt, dimensions, measures, exploreGenerationExamples) || {}
       if (!dimensions.length || !measures.length) {
         showBoundary(new Error('Dimensions or measures are not defined'))
         return
@@ -779,7 +655,7 @@ ${exploreRefinementExamples &&
     const wrappedMessage = promptWrapper(message)
     try {
       if (
-        AI_ENDPOINT &&
+        VERTEX_AI_ENDPOINT &&
         VERTEX_BIGQUERY_LOOKER_CONNECTION_NAME &&
         VERTEX_BIGQUERY_MODEL_ID
       ) {
@@ -789,49 +665,21 @@ ${exploreRefinementExamples &&
       }
 
       let response = ''
-      if (AI_ENDPOINT) {
-        response = await cloudFunction(wrappedMessage, parameters)
-        // Call the shadow function with shared context
-         await cloudFunctionWithContext(sharedContextforShadow?.prompt||'', parameters, sharedContextforShadow)
+      if (VERTEX_AI_ENDPOINT) {
+        response = await vertexCloudFunction(wrappedMessage, parameters)
       } else if (
         VERTEX_BIGQUERY_LOOKER_CONNECTION_NAME &&
         VERTEX_BIGQUERY_MODEL_ID
       ) {
         response = await vertexBigQuery(wrappedMessage, parameters)
       } else {
-        throw new Error('No AI or BigQuery connection found')
+        throw new Error('No Vertex AI or BigQuery connection found')
       }
 
       return typeof response === 'string' ? response : JSON.stringify(response)
     } catch (error) {
       showBoundary(error)
       return ''
-    }
-  }
-
-  const testVertexSettings = async () => {
-    if (settings.useCloudFunction.value && (!AI_ENDPOINT)) {
-      return false
-    }
-    if (!settings.useCloudFunction.value && (!VERTEX_BIGQUERY_LOOKER_CONNECTION_NAME || !VERTEX_BIGQUERY_MODEL_ID)) {
-      return false
-    }
-    try {
-      const response = settings.useCloudFunction.value ? await cloudFunctionWithContext('Please describe the real estate market in Seattle.', {}, sharedContextforShadow) : await vertexBigQuery('test', {})
-      console.log('Response from test:', response)
-      // type of response
-      console.log(typeof response)
-      if (JSON.stringify(response) !== '' && !JSON.stringify(response).includes('Failed to authenticate')) {
-        dispatch(setVertexTestSuccessful(true))
-        return true
-      } else {
-        dispatch(setVertexTestSuccessful(false))
-        return false
-      }
-    } catch (error) {
-      console.error('Error testing Vertex settings:', error)
-      dispatch(setVertexTestSuccessful(false))
-      return false
     }
   }
 
@@ -844,7 +692,6 @@ ${exploreRefinementExamples &&
     summarizePrompts,
     isSummarizationPrompt,
     summarizeExplore,
-    testVertexSettings,
   }
 }
 

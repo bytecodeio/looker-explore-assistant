@@ -104,7 +104,7 @@ export class ExploreFilterValidator {
     (f) => /^(this|next|last)\s+(week|month|quarter|year)$/.test(f),
     // {n} {interval}, {n} {interval} ago, {n} {interval} ago for {n} {interval}, {n} {interval} from now, {n} {interval} from now for {n} {interval}
     (f) =>
-      /^\d+\s+(second|minute|hour|day|week|month|year)s?(\s+(ago|from\s+now))?$/.test(
+      /^\d+\s*(?:\+)?(second|minute|hour|day|week|month|year)s?(?:\s*(?:\+)?(ago|from\s+now))?$/.test(
         f,
       ),
     (f) =>
