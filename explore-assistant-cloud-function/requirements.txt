@@ -2,3 +2,7 @@ functions-framework==3.*
 google-cloud-aiplatform>=1.50
 Flask
 Flask-Cors
+
+langchain_google_vertexai 
+langgraph 
+google-cloud-aiplatform
