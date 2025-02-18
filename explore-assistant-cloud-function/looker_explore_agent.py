@@ -133,6 +133,17 @@ def fetch_data_from_bigquery(project_id, dataset_id, table_id):
     rows = [dict(row) for row in results]
     return rows
 
+# Check if the table contains any data
+def check_table_data(project_id, dataset_id, table_id):
+    client = bigquery.Client(project=project_id)
+    query = f"SELECT COUNT(*) as count FROM `{project_id}.{dataset_id}.{table_id}`"
+    query_job = client.query(query)
+    results = query_job.result()
+    for row in results:
+        if row["count"] > 0:
+            return True
+    return False
+
 # Custom reducer function to handle multiple values for explores
 def add_explores(existing_explores, new_explores):
     return existing_explores + new_explores
@@ -157,6 +168,13 @@ class State(TypedDict):
 
 # Define the nodes for the LangGraph workflow
 def get_explores_node(state: Dict) -> Dict:
+    project_id = "combined-genai-bi"
+    dataset_id = "explore_assistant"
+    table_id = "explore_descriptions"
+    if check_table_data(project_id, dataset_id, table_id):
+        logging.info("Table contains data. Transitioning to fetch_and_return_data node.")
+        return {"transition_to": "fetch_and_return_data"}
+    
     sdk = init_looker_sdk()
     explores = fetch_explores(sdk)
     if not explores:
@@ -167,6 +185,8 @@ def get_explores_node(state: Dict) -> Dict:
     return {"explores": explores[:10], "current_explore_index": 0, "processed_explores": set()}  # Initialize the index and processed_explores set
 
 def get_system_activity_node(state: Dict) -> Dict:
+    if "current_explore_index" not in state:
+        state["current_explore_index"] = 0  # Initialize current_explore_index if it doesn't exist
     if state["current_explore_index"] >= len(state["explores"]):
         logging.error("Explores list is empty in get_system_activity_node.")
         return state  # Return state as is if explores list is empty
