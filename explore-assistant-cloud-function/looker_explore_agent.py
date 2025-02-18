@@ -163,8 +163,9 @@ class State(TypedDict):
     explores: Annotated[List[Dict], add_explores]
     metadata: Annotated[Dict[str, Dict[str, List[str]]], add_metadata]
     potential_queries: str
-    current_explore_index: int  # Add an index to keep track of the current explore
-    processed_explores: set  # Add a set to track processed explores
+    current_explore_index: int
+    processed_explores: set
+    user_query: str  # Add user_query to the state
 
 # Define the nodes for the LangGraph workflow
 def get_explores_node(state: Dict) -> Dict:
@@ -182,7 +183,7 @@ def get_explores_node(state: Dict) -> Dict:
     # filter to only explores in the model "popular_names"
     explores = [explore for explore in explores if explore['model_name'] == "popular_names"]
     logging.info(f"Filtered explores: {explores}")
-    return {"explores": explores[:10], "current_explore_index": 0, "processed_explores": set()}  # Initialize the index and processed_explores set
+    return {"explores": explores[:10], "current_explore_index": 0, "processed_explores": set(), "user_query": state.get("user_query", "")}  # Initialize user_query
 
 def get_system_activity_node(state: Dict) -> Dict:
     if "current_explore_index" not in state:
@@ -252,12 +253,36 @@ def ask_llm_and_store_node(state: Dict) -> Dict:
     logging.info(f"Updated current_explore_index: {state['current_explore_index']}")
     return {"messages": [AIMessage(content=llm_response)], "potential_queries": state["potential_queries"], "explores": state["explores"], "current_explore_index": state["current_explore_index"], "processed_explores": state["processed_explores"]}  # Ensure potential_queries and explores are returned
 
+def ask_llm_for_relevant_explores(user_query, explores, query_results):
+    explore_descriptions = [
+        f"{explore['name']} in model {explore['model_name']}" 
+        for explore in explores 
+        if 'name' in explore and 'model_name' in explore
+    ]
+    query_results_json = json.dumps(query_results)
+    prompt = (
+        f"Given the following explores and the user query '{user_query}', which explores can answer the query? "
+        "Please return ONLY a JSON object with an array of explore names and model names, in the format: "
+        "[{'explore':'male_names','model':'popular_names'},{'explore':'female_names','model':'popular_names'}]\n\n"
+        f"Explores:\n{', '.join(explore_descriptions)}\n\nQuery Results:\n{query_results_json}"
+    )
+    llm = ChatVertexAI(model_name="gemini-pro")
+    response = llm.invoke(prompt)
+    print(response.content)
+    # trim ```json and ``` from the response
+    response_content = response.content.replace("```json", "").replace("```", "")
+    return json.loads(response_content)
+    
 def fetch_and_return_data_node(state: Dict) -> Dict:
     project_id = "combined-genai-bi"
     dataset_id = "explore_assistant"
     table_id = "explore_descriptions"
     rows = fetch_data_from_bigquery(project_id, dataset_id, table_id)
-    return {"messages": [AIMessage(content=json.dumps(rows))]}
+    
+    # Call LLM to determine relevant explores
+    relevant_explores = ask_llm_for_relevant_explores(state["user_query"], rows, rows)
+    
+    return {"messages": [AIMessage(content=json.dumps(relevant_explores))]}
 
 # Initialize MemorySaver for logging
 memory = MemorySaver()
@@ -293,7 +318,8 @@ def run_graph():
         "configurable": {"thread_id": "1"},
         "recursion_limit": 100  # Increase the recursion limit
     }
-    events = graph.stream({"messages": [{"role": "user", "content": "start"}]}, config, stream_mode="values")
+    user_query = input("Please enter your query: ")  # Get the user's query
+    events = graph.stream({"messages": [{"role": "user", "content": user_query}], "user_query": user_query}, config, stream_mode="values")
     for event in events:
         logging.info(f"Event: {event}")
         logging.info(event["messages"][-1].content)
