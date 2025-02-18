@@ -13,6 +13,8 @@ from langchain_core.tools import tool
 from typing_extensions import TypedDict
 from google.cloud.exceptions import NotFound
 import logging
+import time
+from langgraph.checkpoint.memory import MemorySaver
 
 logging.basicConfig(level=logging.INFO)
 
@@ -57,7 +59,7 @@ def fetch_system_activity(sdk, explore):
         )
         return json.loads(response)[0:10]
     except error.SDKError as e:
-        print(e.message)
+        logging.error(e.message)
         return []
 
 # Fetch LookML dimensions and measures
@@ -89,7 +91,6 @@ def ask_llm_about_queries(model, explore, metadata):
     prompt = f"Given the following LookML metadata for the explore '{explore}' in model '{model}', what kind of queries can this explore answer? Please don't reply with sql, just the name of the explore and a list of some sample natural language questions it can answer.\n\nDimensions:\n{', '.join(dimensions)}\n\nMeasures:\n{', '.join(measures)}"
     llm = ChatVertexAI(model_name="gemini-pro")
     response = llm.invoke(prompt)
-    print(response)
     return response.content
 
 # Store information in BigQuery
@@ -104,23 +105,33 @@ def store_in_bigquery(project_id, dataset_id, table_id, data):
     except NotFound:
         schema = [
             bigquery.SchemaField("explore", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("model", "STRING", mode="REQUIRED"),  # Add model field
             bigquery.SchemaField("metadata", "STRING", mode="REQUIRED"),
             bigquery.SchemaField("potential_queries", "STRING", mode="REQUIRED"),
         ]
         table = bigquery.Table(table_ref, schema=schema)
         client.create_table(table)
         logging.info(f"Created table {table_id} in dataset {dataset_id}.")
+        time.sleep(2)  # Wait for 2 seconds to allow the change to propagate
 
     # Convert metadata to JSON string
     data["metadata"] = json.dumps(data["metadata"])
     data["potential_queries"] = data["potential_queries"]  # Store the LLM generated summary
 
-    logging.info(f"Inserting data into BigQuery: {data}")
     errors = client.insert_rows_json(table_ref, [data])
     if errors:
         logging.error(f"Encountered errors while inserting rows: {errors}")
     else:
         logging.info("Data inserted successfully into BigQuery.")
+
+# Fetch data from BigQuery table
+def fetch_data_from_bigquery(project_id, dataset_id, table_id):
+    client = bigquery.Client(project=project_id)
+    query = f"SELECT * FROM `{project_id}.{dataset_id}.{table_id}`"
+    query_job = client.query(query)
+    results = query_job.result()
+    rows = [dict(row) for row in results]
+    return rows
 
 # Custom reducer function to handle multiple values for explores
 def add_explores(existing_explores, new_explores):
@@ -142,6 +153,7 @@ class State(TypedDict):
     metadata: Annotated[Dict[str, Dict[str, List[str]]], add_metadata]
     potential_queries: str
     current_explore_index: int  # Add an index to keep track of the current explore
+    processed_explores: set  # Add a set to track processed explores
 
 # Define the nodes for the LangGraph workflow
 def get_explores_node(state: Dict) -> Dict:
@@ -152,7 +164,7 @@ def get_explores_node(state: Dict) -> Dict:
     # filter to only explores in the model "popular_names"
     explores = [explore for explore in explores if explore['model_name'] == "popular_names"]
     logging.info(f"Filtered explores: {explores}")
-    return {"explores": explores[:10], "current_explore_index": 0}  # Initialize the index
+    return {"explores": explores[:10], "current_explore_index": 0, "processed_explores": set()}  # Initialize the index and processed_explores set
 
 def get_system_activity_node(state: Dict) -> Dict:
     if state["current_explore_index"] >= len(state["explores"]):
@@ -162,7 +174,7 @@ def get_system_activity_node(state: Dict) -> Dict:
     explore = state["explores"][state["current_explore_index"]]
     logging.info(f"Processing explore: {explore['name']} in get_system_activity_node.")
     system_activity = fetch_system_activity(sdk, explore['name'])  # Use 'name' from dictionary
-    return {"messages": [AIMessage(content=json.dumps(system_activity))], "explores": state["explores"], "current_explore_index": state["current_explore_index"] + 1}
+    return {"messages": [AIMessage(content=json.dumps(system_activity))], "explores": state["explores"], "current_explore_index": state["current_explore_index"] + 1, "processed_explores": state["processed_explores"]}
 
 def get_lookml_metadata_node(state: Dict) -> Dict:
     if state["current_explore_index"] >= len(state["explores"]):
@@ -183,7 +195,7 @@ def get_lookml_metadata_node(state: Dict) -> Dict:
             state["current_explore_index"] += 1
             continue  # Skip to the next explore
         state["current_explore_index"] += 1
-    return {"metadata": state["metadata"], "explores": state["explores"], "current_explore_index": state["current_explore_index"]}  # Ensure explores is returned
+    return {"metadata": state["metadata"], "explores": state["explores"], "current_explore_index": state["current_explore_index"], "processed_explores": state["processed_explores"]}  # Ensure explores is returned
 
 def ask_llm_and_store_node(state: Dict) -> Dict:
     if state["current_explore_index"] >= len(state["explores"]):
@@ -191,6 +203,10 @@ def ask_llm_and_store_node(state: Dict) -> Dict:
         return state  # Return state as is if explores list is empty
     explore = state["explores"][state["current_explore_index"]]
     explore_name = explore['name']  # Use 'name' from dictionary
+    if explore_name in state["processed_explores"]:
+        logging.info(f"Explore {explore_name} already processed. Skipping.")
+        state["current_explore_index"] += 1
+        return state  # Skip already processed explores
     metadata = state["metadata"].get(explore_name, {})  # Use explore_name as the key
     llm_response = ask_llm_about_queries(explore['model_name'], explore_name, metadata)  # Use 'model_name' and explore_name
     if "potential_queries" not in state:
@@ -206,11 +222,25 @@ def ask_llm_and_store_node(state: Dict) -> Dict:
         logging.info(f"Potential queries found for explore: {explore_name}")
         data = {
             "explore": explore_name,
+            "model": explore['model_name'],  # Add model field
             "metadata": explore,
             "potential_queries": state["potential_queries"][explore_name]
         }
         store_in_bigquery(project_id, dataset_id, table_id, data)
-    return {"messages": [AIMessage(content=llm_response)], "potential_queries": state["potential_queries"], "explores": state["explores"], "current_explore_index": state["current_explore_index"] + 1}  # Ensure potential_queries and explores are returned
+    state["processed_explores"].add(explore_name)  # Mark explore as processed
+    state["current_explore_index"] += 1  # Increment the index after storing data
+    logging.info(f"Updated current_explore_index: {state['current_explore_index']}")
+    return {"messages": [AIMessage(content=llm_response)], "potential_queries": state["potential_queries"], "explores": state["explores"], "current_explore_index": state["current_explore_index"], "processed_explores": state["processed_explores"]}  # Ensure potential_queries and explores are returned
+
+def fetch_and_return_data_node(state: Dict) -> Dict:
+    project_id = "combined-genai-bi"
+    dataset_id = "explore_assistant"
+    table_id = "explore_descriptions"
+    rows = fetch_data_from_bigquery(project_id, dataset_id, table_id)
+    return {"messages": [AIMessage(content=json.dumps(rows))]}
+
+# Initialize MemorySaver for logging
+memory = MemorySaver()
 
 # Define the LangGraph workflow
 graph_builder = StateGraph(State)
@@ -218,6 +248,7 @@ graph_builder.add_node("get_explores", get_explores_node)
 graph_builder.add_node("get_system_activity", get_system_activity_node)
 graph_builder.add_node("get_lookml_metadata", get_lookml_metadata_node)
 graph_builder.add_node("ask_llm_and_store", ask_llm_and_store_node)
+graph_builder.add_node("fetch_and_return_data", fetch_and_return_data_node)
 
 graph_builder.add_edge(START, "get_explores")
 graph_builder.add_edge("get_explores", "get_system_activity")
@@ -227,11 +258,14 @@ graph_builder.add_edge("get_lookml_metadata", "ask_llm_and_store")
 # Use add_conditional_edges for conditional transitions
 graph_builder.add_conditional_edges(
     "ask_llm_and_store",
-    lambda state: "ask_llm_and_store" if state["current_explore_index"] < len(state["explores"]) else END,
-    {"ask_llm_and_store": "ask_llm_and_store", END: END}
+    lambda state: "ask_llm_and_store" if state["current_explore_index"] < len(state["explores"]) else "fetch_and_return_data",
+    {"ask_llm_and_store": "ask_llm_and_store", "fetch_and_return_data": "fetch_and_return_data"}
 )
 
-graph = graph_builder.compile()
+graph_builder.add_edge("fetch_and_return_data", END)
+
+# Compile the graph with MemorySaver for logging
+graph = graph_builder.compile(checkpointer=memory)
 
 def run_graph():
     logging.info("Starting the graph execution.")
