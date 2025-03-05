@@ -1,7 +1,3 @@
-# Explore Assistant Cloud Function
-
-This file is not necessary for basic installation of the application.
-
 This cloud function provides an API for generating Looker queries using the Vertex AI Gemini Pro model. It allows users to input natural language descriptions of data queries, which the function then converts into Looker Explore URLs or query suggestions using a generative AI model.
 
 ## How It Works
@@ -64,8 +60,47 @@ By default, the cloud function will use a default model. However, you may want t
 
 In development, you can run the main script with a new MODEL_NAME variable:
 
-```bash
-PROJECT=XXXX LOCATION=us-central-1 VERTEX_CF_AUTH_TOKEN=$(cat ../.vertex_cf_auth_token) MODEL_NAME=XXXXX python main.py
-```
 
-In production, on the cloud function, you can manually set a variable in the GCP UI. Updating the variable will re-deploy the cloud function.
+## Testing
+
+### Basic Testing
+To run basic tests using the Flask development server:
+
+1. Start the local server:
+   ```bash
+   python explore-assistant-cloud-function/main.py
+   ```
+   The server will start on http://localhost:8000
+
+2. Run the simple test script:
+   ```bash
+   python explore-assistant-cloud-function/test.py
+   ```
+   Make sure you have the `.vertex_cf_auth_token` file in the parent directory.
+
+### Comprehensive Testing
+For running the full test suite:
+
+1. Prepare test questions in a CSV file:
+   ```bash
+   # Default location: documents/question_set.csv
+   ```
+
+2. Run the test suite:
+   ```bash
+   python explore-assistant-cloud-function/testing/test_runner.py \
+     --questions path/to/question_set.csv \
+     --output ./test_results \
+     --looker-url https://your-looker-instance.com
+   ```
+
+   Optional arguments:
+   - `--limit N`: Test only N questions
+   - `--skip-visualizations`: Skip visualization tests
+   - `--question-id ID`: Test a specific question
+   - `--question-text "text"`: Test with custom question
+
+3. View results:
+   - Test results will be saved in the specified output directory
+   - Check `summary_report.html` and `detailed_report.html` for test results
+   - Visualizations are stored in the `visualizations` subdirectory

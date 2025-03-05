@@ -215,6 +215,10 @@ if __name__ == "__main__":
                         help="URL of the Looker instance")
     parser.add_argument("--skip-visualizations", action="store_true",
                         help="Skip requesting and evaluating visualizations")
+    parser.add_argument("--question-id", type=str, default=None,
+                        help="Run a single test by question ID")
+    parser.add_argument("--question-text", type=str, default=None,
+                        help="Run a single test with the specified question text")
     
     args = parser.parse_args()
     
@@ -227,18 +231,34 @@ if __name__ == "__main__":
         "skip_visualizations": args.skip_visualizations
     }
     
-    # Load questions and run tests
-    questions = load_questions_from_csv(args.questions)
+    # Load questions from CSV
+    all_questions = load_questions_from_csv(args.questions)
     
-    if not questions:
+    if not all_questions:
         logger.error("No questions loaded. Exiting.")
         exit(1)
+    
+    # Filter questions based on command line arguments
+    if args.question_id:
+        questions = [q for q in all_questions if q["text"].startswith(f"{args.question_id}.")]
+        if not questions:
+            logger.error(f"No question found with ID: {args.question_id}")
+            exit(1)
+        logger.info(f"Running single test with ID: {args.question_id}")
+    elif args.question_text:
+        # Create a single question entry with the provided text
+        questions = [{"type": "Custom", "text": args.question_text}]
+        logger.info(f"Running single test with custom question: {args.question_text}")
+    else:
+        questions = all_questions
+        if args.limit and args.limit > 0:
+            questions = questions[:args.limit]
     
     summary = run_batch_test(
         questions=questions,
         config=config,
         output_dir=output_dir,
-        limit=args.limit
+        limit=None  # We've already filtered the questions
     )
     
     logger.info(f"Testing complete. Results saved to {output_dir}")
