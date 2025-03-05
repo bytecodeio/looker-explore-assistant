@@ -23,7 +23,8 @@ class WorkflowVisualizer:
             
     def generate_workflow_diagram(self, filename: str = "looker_explore_workflow", 
                                   include_llm_info: bool = True,
-                                  include_data_flow: bool = True) -> str:
+                                  include_data_flow: bool = True,
+                                  include_feedback: bool = True) -> str:
         """
         Generate a visualization of the Looker Explore workflow
         
@@ -31,13 +32,14 @@ class WorkflowVisualizer:
             filename: Name of the output file (without extension)
             include_llm_info: Whether to include information about LLM models used
             include_data_flow: Whether to include details about data flowing between nodes
+            include_feedback: Whether to include the feedback handling flow
             
         Returns:
             Path to the generated diagram file
         """
         # Create a new directed graph
         dot = Digraph(comment='Looker Explore Assistant Workflow')
-        dot.attr(rankdir='TB', size='11,8', dpi='300')
+        dot.attr(rankdir='TB', size='12,10', dpi='300')
         
         # Define node styles
         dot.attr('node', shape='box', style='rounded,filled', 
@@ -51,6 +53,8 @@ class WorkflowVisualizer:
         with dot.subgraph(name='cluster_user') as c:
             c.attr(label='User Interaction', style='filled', color='lightgrey', fontname='Arial Bold')
             c.node('user_query', 'User Query\n(Input Question)', fillcolor='#D6EAF8')
+            c.node('user_feedback', 'User Feedback', fillcolor='#D6EAF8')
+            c.node('user_verification', 'User Verification', fillcolor='#D6EAF8')
             c.node('response', 'Final Response\n(Answer + Visualization)', fillcolor='#D6EAF8')
         
         # Explore Selection & Understanding
@@ -73,7 +77,16 @@ class WorkflowVisualizer:
             c.node('execute', 'Execute Explore\n(Run the Generated Query)', fillcolor='#FADBD8')
             c.node('summarize', 'Data Summarization\n(Extract Insights)', fillcolor='#FADBD8')
         
-        # Add connections/edges
+        # Feedback Processing (only if include_feedback is True)
+        if include_feedback:
+            with dot.subgraph(name='cluster_feedback') as c:
+                c.attr(label='Feedback Processing', style='filled', color='lightgrey', fontcolor='darkblue')
+                c.node('feedback_detection', 'Feedback Detection\n(Analyze User Complaint)', fillcolor='#AED6F1')
+                c.node('explore_regen', 'Explore Regeneration\n(Improve Based on Feedback)', fillcolor='#AED6F1')
+                c.node('verification_node', 'Verification Request\n(Ask User If Improved)', fillcolor='#AED6F1')
+                c.node('example_storage', 'Example Storage\n(Save Successful Improvements)', fillcolor='#AED6F1')
+        
+        # Add connections/edges for main flow
         dot.edge('user_query', 'query_node')
         dot.edge('query_node', 'explore_selection', label='Processed Question' if include_data_flow else '')
         dot.edge('explore_selection', 'semantic_model', label='Selected Explore' if include_data_flow else '')
@@ -83,16 +96,46 @@ class WorkflowVisualizer:
         dot.edge('execute', 'summarize', label='Query Results' if include_data_flow else '')
         dot.edge('summarize', 'response')
         
+        # Add connections/edges for feedback flow
+        if include_feedback:
+            dot.edge('response', 'user_feedback', style='dashed', constraint='false')
+            dot.edge('user_feedback', 'feedback_detection')
+            dot.edge('feedback_detection', 'explore_regen', label='If complaint detected')
+            
+            # Connect feedback flow back to main flow
+            dot.edge('explore_regen', 'filter_values', style='dashed', color='blue', constraint='false')
+            dot.edge('execute', 'verification_node', style='dashed', color='blue', constraint='false')
+            dot.edge('verification_node', 'user_verification', style='dashed', color='blue')
+            dot.edge('user_verification', 'example_storage', style='dashed', color='blue')
+            
+            # Add decision diamond
+            dot.node('feedback_decision', 'Needs\nRegeneration?', shape='diamond', fillcolor='#F5B7B1')
+            dot.edge('feedback_detection', 'feedback_decision', constraint='false')
+            dot.edge('feedback_decision', 'explore_regen', label='Yes')
+            dot.edge('feedback_decision', 'response', label='No', constraint='false')
+            
+            # Add verification diamond
+            dot.node('verification_decision', 'Is Correct?', shape='diamond', fillcolor='#F5B7B1')
+            dot.edge('user_verification', 'verification_decision', style='dashed', color='blue')
+            dot.edge('verification_decision', 'example_storage', label='Yes', style='dashed', color='blue')
+            dot.edge('verification_decision', 'user_feedback', label='No', style='dashed', color='blue', constraint='false')
+        
         # Add LLM model information if requested
         if include_llm_info:
             dot.node('model_fast', 'Fast Model\n(Gemini Pro)', shape='note', fillcolor='#E8DAEF')
             dot.node('model_thinking', 'Thinking Model\n(Claude 3.7 Sonnet)', shape='note', fillcolor='#E8DAEF')
             dot.node('model_summary', 'Summary Model\n(Gemini Pro)', shape='note', fillcolor='#E8DAEF')
+            dot.node('model_filter', 'Filter Model\n(Gemini Pro)', shape='note', fillcolor='#E8DAEF')
             
+            # Connect models to nodes using dashed lines
             dot.edge('model_fast', 'explore_selection', style='dashed', color='gray')
             dot.edge('model_fast', 'filter_values', style='dashed', color='gray')
             dot.edge('model_thinking', 'params_gen', style='dashed', color='gray')
             dot.edge('model_summary', 'summarize', style='dashed', color='gray')
+            
+            if include_feedback:
+                dot.edge('model_fast', 'feedback_detection', style='dashed', color='gray')
+                dot.edge('model_thinking', 'explore_regen', style='dashed', color='gray')
         
         # Add conditionals and decision points
         dot.node('check_explore', 'Selected\nExplore?', shape='diamond', fillcolor='#F5B7B1')
@@ -112,6 +155,71 @@ class WorkflowVisualizer:
         dot.render(output_path, format='png', cleanup=True)
         
         logging.info(f"Workflow diagram generated at: {output_path}.png")
+        return f"{output_path}.png"
+    
+    def generate_feedback_flow_diagram(self, filename: str = "feedback_flow_diagram") -> str:
+        """
+        Generate a visualization specifically for the feedback flow
+        
+        Args:
+            filename: Name of the output file (without extension)
+            
+        Returns:
+            Path to the generated diagram file
+        """
+        # Create a new directed graph
+        dot = Digraph(comment='Feedback Processing Flow')
+        dot.attr(rankdir='TB', size='10,8', dpi='300')
+        
+        # Define node styles
+        dot.attr('node', shape='box', style='rounded,filled', 
+                 fontname='Arial', fontsize='12', margin='0.2,0.1')
+        
+        # Define edge styles
+        dot.attr('edge', fontname='Arial', fontsize='10')
+        
+        # User nodes
+        dot.node('initial_response', 'Initial Explore Response', fillcolor='#D6EAF8')
+        dot.node('user_feedback', 'User Feedback', fillcolor='#D6EAF8')
+        dot.node('user_verification', 'User Verification', fillcolor='#D6EAF8')
+        dot.node('final_response', 'Final Response', fillcolor='#D6EAF8')
+        
+        # Processing nodes
+        dot.node('feedback_detection', 'Feedback Detection\n(Analyze User Input)', fillcolor='#AED6F1')
+        dot.node('explore_regen', 'Explore Regeneration\n(Improve Based on Feedback)', fillcolor='#AED6F1')
+        dot.node('execute_explore', 'Execute Explore\n(Run New Query)', fillcolor='#AED6F1')
+        dot.node('verification_request', 'Verification Request\n(Ask If Improved)', fillcolor='#AED6F1')
+        dot.node('example_storage', 'Example Storage\n(Save to BigQuery)', fillcolor='#AED6F1')
+        
+        # Decision nodes
+        dot.node('needs_regen', 'Needs\nRegeneration?', shape='diamond', fillcolor='#F5B7B1')
+        dot.node('is_correct', 'Is\nCorrect?', shape='diamond', fillcolor='#F5B7B1')
+        
+        # Add flows
+        dot.edge('initial_response', 'user_feedback', label='User provides feedback')
+        dot.edge('user_feedback', 'feedback_detection')
+        dot.edge('feedback_detection', 'needs_regen')
+        
+        # No regeneration needed
+        dot.edge('needs_regen', 'final_response', label='No')
+        
+        # Regeneration flow
+        dot.edge('needs_regen', 'explore_regen', label='Yes')
+        dot.edge('explore_regen', 'execute_explore')
+        dot.edge('execute_explore', 'verification_request')
+        dot.edge('verification_request', 'user_verification')
+        dot.edge('user_verification', 'is_correct')
+        
+        # Verification results
+        dot.edge('is_correct', 'example_storage', label='Yes')
+        dot.edge('example_storage', 'final_response')
+        dot.edge('is_correct', 'user_feedback', label='No', constraint='false')
+        
+        # Save the diagram
+        output_path = os.path.join(self.output_dir, filename)
+        dot.render(output_path, format='png', cleanup=True)
+        
+        logging.info(f"Feedback flow diagram generated at: {output_path}.png")
         return f"{output_path}.png"
         
     def generate_conditional_flow_diagram(self, filename: str = "conditional_document_flow") -> str:
@@ -246,6 +354,7 @@ def generate_workflow_diagrams(output_dir: str = None) -> Dict[str, str]:
     
     diagrams = {
         'workflow': visualizer.generate_workflow_diagram(),
+        'feedback_flow': visualizer.generate_feedback_flow_diagram(),
         'conditional_docs': visualizer.generate_conditional_flow_diagram(),
         'model_selection': visualizer.generate_model_selection_diagram()
     }

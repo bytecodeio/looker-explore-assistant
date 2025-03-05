@@ -1,7 +1,7 @@
 import logging
 import json
 import urllib.parse
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple, Optional
 from looker_sdk import init40, error
 from langchain_core.messages import AIMessage
 
@@ -9,8 +9,18 @@ def init_looker_sdk():
     sdk = init40()
     return sdk
 
-def execute_explore(sdk, explore_params: Dict[str, Any]):
-    """Execute the explore with the given parameters"""
+def execute_explore(sdk, explore_params: Dict[str, Any], result_format: str = "md") -> Tuple[Any, Optional[bytes]]:
+    """
+    Execute the explore with the given parameters
+    
+    Args:
+        sdk: Looker SDK instance
+        explore_params: Dictionary of explore parameters
+        result_format: Result format (md for markdown, png for visualization)
+        
+    Returns:
+        Tuple of (result_data, visualization_data)
+    """
     try:
         # Extract parameters
         model = explore_params.get("model")
@@ -22,7 +32,7 @@ def execute_explore(sdk, explore_params: Dict[str, Any]):
         
         if not model or not view or not fields:
             logging.error("Missing required explore parameters")
-            return None
+            return None, None
             
         # Create query
         query = sdk.create_query(
@@ -36,19 +46,30 @@ def execute_explore(sdk, explore_params: Dict[str, Any]):
         
         if not query or not query.id:
             logging.error("Failed to create query")
-            return None
+            return None, None
             
-        # Run query
+        # Run query with requested format
         result = sdk.run_query(
             query_id=query.id,
-            result_format="md"
+            result_format=result_format
         )
         
-        return result
+        # For PNG format, get both visualization and text data
+        visualization_data = None
+        if result_format == "png":
+            visualization_data = result
+            # Also fetch the data in markdown format for the text response
+            text_result = sdk.run_query(
+                query_id=query.id,
+                result_format="md"
+            )
+            result = text_result
+        
+        return result, visualization_data
         
     except error.SDKError as e:
         logging.error(f"Error executing explore: {e}")
-        return None
+        return None, None
 
 def summarize_data(llm, result_data: str) -> str:
     """Summarize the data results using an LLM"""
@@ -160,8 +181,12 @@ def execute_explore_node(state: Dict) -> Dict:
     # Initialize SDK
     sdk = init_looker_sdk()
     
+    # Check if visualization is requested
+    request_visualization = state.get("request_visualization", False)
+    result_format = "png" if request_visualization else "md"
+    
     # Execute explore
-    result = execute_explore(sdk, explore_params)
+    result, visualization_data = execute_explore(sdk, explore_params, result_format)
     
     if not result:
         return {
@@ -216,7 +241,7 @@ def execute_explore_node(state: Dict) -> Dict:
     """
     
     # Update state with results
-    return {
+    updated_state = {
         **state,
         "explore_result": result,
         "explore_summary": summary,
@@ -226,3 +251,9 @@ def execute_explore_node(state: Dict) -> Dict:
             AIMessage(content=f"## Explore URL\nYou can view and modify this explore directly in Looker by clicking this link:\n\n[Open in Looker]({explore_url})")
         ]
     }
+    
+    # Add visualization data if available
+    if visualization_data:
+        updated_state["visualization_data"] = visualization_data
+    
+    return updated_state

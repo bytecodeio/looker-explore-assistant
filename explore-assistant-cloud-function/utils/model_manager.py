@@ -1,93 +1,113 @@
+import os
 import logging
 from typing import Dict, Any, Optional
-from langchain.llms import VertexAI
-from langchain_anthropic import AnthropicLLM
-from langchain_core.language_models import BaseLLM
+
+from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
+from langchain_core.language_models.chat_models import BaseChatModel
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 class ModelManager:
     """
-    Manager for different LLM models used throughout the application.
-    Provides appropriate models for different tasks based on complexity.
+    Manages LLM models for different tasks in the workflow and testing framework
     """
     
-    def __init__(self):
-        """Initialize the model manager with different LLM instances"""
-        # Initialize models
-        self._fast_model = None
-        self._thinking_model = None
-        self._summary_model = None
-        self._filter_model = None
-        
-    def get_fast_model(self) -> BaseLLM:
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
-        Get a fast, efficient model for simpler tasks like classification
-        and basic text generation.
-        """
-        if self._fast_model is None:
-            logging.info("Initializing fast model (Gemini Pro)")
-            self._fast_model = VertexAI(
-                model_name="gemini-pro",
-                max_output_tokens=1024,
-                temperature=0
-            )
-        return self._fast_model
-        
-    def get_thinking_model(self) -> BaseLLM:
-        """
-        Get a powerful model with reasoning capabilities for complex tasks
-        like explore parameter generation.
-        """
-        if self._thinking_model is None:
-            logging.info("Initializing thinking model (Claude 3.7 Sonnet)")
-            self._thinking_model = AnthropicLLM(
-                model_name="claude-3-sonnet-20240229",
-                temperature=0,
-                max_tokens_to_sample=4096,
-                anthropic_api_key="YOUR_API_KEY_HERE"  # Replace with environment variable or secret
-            )
-        return self._thinking_model
-        
-    def get_summary_model(self) -> BaseLLM:
-        """
-        Get a model optimized for summarization tasks.
-        """
-        if self._summary_model is None:
-            logging.info("Initializing summary model (Gemini Pro)")
-            self._summary_model = VertexAI(
-                model_name="gemini-pro",
-                max_output_tokens=2048,
-                temperature=0.1  # Slightly higher temperature for creative summaries
-            )
-        return self._summary_model
-    
-    def get_filter_model(self) -> BaseLLM:
-        """
-        Get a lightweight model for filter value selection.
-        """
-        if self._filter_model is None:
-            logging.info("Initializing filter selection model (Gemini Pro)")
-            self._filter_model = VertexAI(
-                model_name="gemini-pro",
-                max_output_tokens=256,  # Lower token limit for simple selection tasks
-                temperature=0
-            )
-        return self._filter_model
-
-    def get_model_for_task(self, task_name: str) -> BaseLLM:
-        """
-        Get the appropriate model for a given task.
+        Initialize the model manager with configuration
         
         Args:
-            task_name: The name of the task (explore_selection, params_generation, etc.)
+            config: Optional configuration for models
+        """
+        self.config = config or {}
+        self._models = {}
+        self._task_model_mapping = {
+            "evaluation": self.config.get("evaluation_model", "claude-3-5-sonnet-20240620"),
+            "explore_selection": self.config.get("explore_selection_model", "claude-3-5-sonnet-20240620"),
+            "explore_params_generation": self.config.get("explore_params_model", "claude-3-5-sonnet-20240620"),
+            "filter_selection": self.config.get("filter_selection_model", "claude-3-5-sonnet-20240620"),
+            "summarization": self.config.get("summarization_model", "claude-3-5-sonnet-20240620"),
+            "image_evaluation": self.config.get("image_evaluation_model", "claude-3-5-sonnet-20240620"),
+            "default": "claude-3-5-sonnet-20240620"
+        }
+    
+    def get_fast_model(self) -> BaseChatModel:
+        """
+        Get a fast model for quick reasoning tasks
+        
+        Returns:
+            A fast LLM instance
+        """
+        return self._get_or_create_model(
+            model_name=self.config.get("fast_model", "gpt-3.5-turbo")
+        )
+    
+    def get_model_for_task(self, task: str) -> BaseChatModel:
+        """
+        Get a model specifically suited for a particular task
+        
+        Args:
+            task: Task identifier string
             
         Returns:
-            The appropriate LLM for the task
+            LLM instance for the specified task
         """
-        if task_name == "explore_params_generation":
-            return self.get_thinking_model()
-        elif task_name == "summarization":
-            return self.get_summary_model()
-        elif task_name == "filter_selection":
-            return self.get_filter_model()
+        model_name = self._task_model_mapping.get(task, self._task_model_mapping["default"])
+        return self._get_or_create_model(model_name)
+    
+    def _get_or_create_model(self, model_name: str) -> BaseChatModel:
+        """
+        Get an existing model instance or create a new one
+        
+        Args:
+            model_name: Name of the model to get or create
+            
+        Returns:
+            LLM instance
+        """
+        if model_name in self._models:
+            return self._models[model_name]
+        
+        # Create model based on name prefix
+        if model_name.startswith("claude"):
+            model = ChatAnthropic(
+                model=model_name,
+                anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
+                temperature=self.config.get("temperature", 0.2)
+            )
+        elif model_name.startswith("gpt"):
+            model = ChatOpenAI(
+                model=model_name,
+                openai_api_key=os.environ.get("OPENAI_API_KEY", ""),
+                temperature=self.config.get("temperature", 0.2)
+            )
         else:
-            return self.get_fast_model()
+            logger.warning(f"Unknown model type: {model_name}, using Claude as default")
+            model = ChatAnthropic(
+                model="claude-3-5-sonnet-20240620",
+                anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
+                temperature=self.config.get("temperature", 0.2)
+            )
+        
+        # Cache model for reuse
+        self._models[model_name] = model
+        return model
+    
+    def configure_model_for_task(self, task: str, model_name: str) -> None:
+        """
+        Update the model mapping for a specific task
+        
+        Args:
+            task: Task identifier string
+            model_name: Model name to use for the task
+        """
+        self._task_model_mapping[task] = model_name
+        # Clear cache if it exists
+        if model_name in self._models:
+            del self._models[model_name]
