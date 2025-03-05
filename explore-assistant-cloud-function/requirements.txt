@@ -6,3 +6,4 @@ Flask-Cors
 langchain_google_vertexai 
 langgraph 
 google-cloud-aiplatform
+graphviz>=0.20.1
