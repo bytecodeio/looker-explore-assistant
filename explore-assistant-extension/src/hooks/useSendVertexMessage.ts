@@ -8,46 +8,32 @@ import process from 'process'
 import { useErrorBoundary } from 'react-error-boundary'
 import { AssistantState } from '../slices/assistantSlice'
 
-const unquoteResponse = (response: string | null | undefined) => {
-  if(!response) {
-    return ''
+import looker_filter_doc from '../documents/looker_filter_doc.md'
+import looker_visualization_doc from '../documents/looker_visualization_doc.md'
+import looker_filters_interval_tf from '../documents/looker_filters_interval_tf.md'
+import looker_pivots_url_parameters_doc from '../documents/looker_pivots_url_parameters_doc.md'
+
+import { ModelParameters } from '../utils/VertexHelper'
+import { BigQueryHelper } from '../utils/BigQueryHelper'
+import { ExploreParams } from '../slices/assistantSlice'
+import { ExploreFilterValidator, FieldType } from '../utils/ExploreFilterHelper'
+
+
+const parseJSONResponse = (jsonString: string | null | undefined) => {
+  if (typeof jsonString !== 'string') {
+    return {}
   }
-  return response
-    .substring(response.indexOf('fields='))
-    .replace(/^`+|`+$/g, '')
-    .trim()
-}
 
-interface ModelParameters {
-  max_output_tokens?: number
-}
+  if (jsonString.startsWith('```json') && jsonString.endsWith('```')) {
+    jsonString = jsonString.slice(7, -3).trim()
+  }
 
-const generateSQL = (
-  model_id: string,
-  prompt: string,
-  parameters: ModelParameters,
-) => {
-  const escapedPrompt = UtilsHelper.escapeQueryAll(prompt)
-  const subselect = `SELECT '` + escapedPrompt + `' AS prompt`
-
-  return `
-  
-    SELECT ml_generate_text_llm_result AS generated_content
-    FROM
-    ML.GENERATE_TEXT(
-        MODEL \`${model_id}\`,
-        (
-          ${subselect}
-        ),
-        STRUCT(
-        0.05 AS temperature,
-        1024 AS max_output_tokens,
-        0.98 AS top_p,
-        TRUE AS flatten_json_output,
-        1 AS top_k)
-      )
-  
-      `
+  try {
+    const parsed = JSON.parse(jsonString)
+    return typeof parsed === 'object' ? parsed : {}
+  } catch (error) {
+    return {}
+  }
 }
 
 function formatContent(field: {
@@ -174,6 +160,66 @@ ${exploreRefinementExamples && exploreRefinementExamples
     [exploreRefinementExamples],
   )
 
+  const promptWrapper = (prompt: string) => {
+    // wrap the prompt with the current date
+    const currentDate = new Date().toLocaleString()
+    return `The current date is ${currentDate}
+    
+    
+    ${prompt}
+    `
+  }
+
+  const generateSharedContext = (dimensions: any[], measures: any[], exploreGenerationExamples: any[]) => {
+    if (!dimensions.length || !measures.length) {
+      showBoundary(new Error('Dimensions or measures are not defined'))
+      return
+    }
+    let exampleText = ''
+    if (exploreGenerationExamples && exploreGenerationExamples.length > 0) {
+      console.log("Line",exploreGenerationExamples)
+      exampleText = exploreGenerationExamples.map((item) => `input: "${item.input}" ; output: ${JSON.stringify(parseLookerURL(item.output))}`).join('\n')
+    }
+    return `
+      # Documentation
+      Here is general documentation about filters:
+        ${looker_filter_doc}
+      Here is general documentation on how intervals and timeframes are applied in Looker
+       ${looker_filters_interval_tf}   
+      Here is general documentation on visualizations:
+       ${looker_visualization_doc}
+      Here is general documentation on Looker JSON fields and pivots
+       ${looker_pivots_url_parameters_doc}
+      # End Documentation
+      
+           
+      # Metadata
+      This information is particular to the current Looker instance and data model. The fields below can be used in the response.
+      Model: ${currentExplore.modelName}
+      Explore: ${currentExplore.exploreId}
+      
+      Dimensions Used to group by information (follow the instructions in tags when using a specific field; if map used include a location or lat long dimension;):
+      
+      | Field Id | Field Type | LookML Type | Label | Description | Tags |
+      |------------|------------|-------------|-------|-------------|------|
+      ${dimensions.map(formatRow).join('\n')}
+                
+      Measures are used to perform calculations (if top, bottom, total, sum, etc. are used include a measure):
+      
+      | Field Id | Field Type | LookML Type | Label | Description | Tags |
+      |------------|------------|-------------|-------|-------------|------|
+      ${measures.map(formatRow).join('\n')}
+      # End LookML Metadata
+    
+      # Example 
+        Examples Below include the fields, filters and sometimes visualization configs. 
+        They were taken at a different date. ALL DATE RANGES ARE WRONG COMPARING TO CURRENT DATE.
+        (BE CAREFUL WITH DATES, DO NOT OUTPUT THE Examples 1:1,  as changes could happen with timeframes and date ranges)
+        ${exampleText}
+      # End Examples
+      
+  `}
+
   const isSummarizationPrompt = async (prompt: string) => {
     const contents = `
       Primer
@@ -292,8 +338,226 @@ ${exploreRefinementExamples && exploreRefinementExamples
     },
     [currentExplore],
   )
+  
+  const parseLookerURL = (url: string): { [key: string]: any } => {
+    // Split URL and extract model & explore
+    console.log("Line 331",url)
+    const urlSplit = url.split("?");
+    let model = ""
+    let explore = ""
+    let queryString = ""
+    if (urlSplit.length == 2) {
+      const rootURL = urlSplit[0]
+      queryString = urlSplit[1]
+      const rootURLElements = rootURL.split("/");
+      model = rootURLElements[rootURLElements.length - 2];
+      explore = rootURLElements[rootURLElements.length - 1];
+    }
+    else if (urlSplit.length == 1) {
+      model = "tbd"
+      explore = "tbd"
+      queryString = urlSplit[0]
+    }
+    // Initialize lookerEncoding object
+    const lookerEncoding: { [key: string]: any } = {};
+    lookerEncoding['model'] = ""
+    lookerEncoding['explore'] = ""
+    lookerEncoding['fields'] = []
+    lookerEncoding['pivots'] = []
+    lookerEncoding['fill_fields'] = []
+    lookerEncoding['filters'] = {}
+    lookerEncoding['filter_expression'] = null
+    lookerEncoding['sorts'] = []
+    lookerEncoding['limit'] = 500
+    lookerEncoding['column_limit'] = 50
+    lookerEncoding['total'] = null
+    lookerEncoding['row_total'] = null
+    lookerEncoding['subtotals'] = null
+    lookerEncoding['vis'] = []
+    // Split query string and iterate key-value pairs
+    const keyValuePairs = queryString.split("&");
+    for (const qq of keyValuePairs) {
+      const [key, value] = qq.split('=');
+      console.log(qq)
+      lookerEncoding['model'] = model
+      lookerEncoding['explore'] = explore
+      switch (key) {
+        case "fields":
+        case "pivots":
+        case "fill_fields":
+        case "sorts":
+          lookerEncoding[key] = value.split(",");
+          break;
+        case "filter_expression":
+        case "total":
+        case "row_total":
+        case "subtotals":
+          lookerEncoding[key] = value;
+          break;
+        case "limit":
+        case "column_limit":
+          lookerEncoding[key] = parseInt(value);
+          break;
+        case "vis":
+          lookerEncoding[key] = JSON.parse(decodeURIComponent(value));
+          break;
+        default:
+          if (key.startsWith("f[")) {
+            const filterKey = key.slice(2, -1);
+            lookerEncoding.filters[filterKey] = value;
+          } else if (key.includes(".")) {
+            const path = key.split(".");
+            let currentObject = lookerEncoding;
+            for (let i = 0; i < path.length - 1; i++) {
+              const segment = path[i];
+              if (!currentObject[segment]) {
+                currentObject[segment] = {};
+              }
+              currentObject = currentObject[segment];
+            }
+            currentObject[path[path.length - 1]] = value;
+          }
+      }
+    }
+    return lookerEncoding;
+  };
+  const generateFilterParams = useCallback(
+    async (prompt: string, sharedContext: string, dimensions: any[], measures: any[]) => {
+      // get the filters
+      const filterContents = `
+      ${sharedContext}
+      
+     # Instructions
+     
+     The user asked the following question:
+     
+     \`\`\`
+     ${prompt}
+     \`\`\`
+     
+     Your job is to follow the steps below and generate a JSON object.
+     
+     * Step 1: Your task is the look at the following data question that the user is asking and determine the filter expression for it. You should return a JSON list of filters to apply. Each element in the list will be a pair of the field id and the filter expression. Your output will look like \`[ { "field_id": "example_view.created_date", "filter_expression": "this year" } ]\`
+     * Step 2: verify that you're only using valid expressions for the filter values. If you do not know what the valid expressions are, refer to the table above. If you are still unsure, don't use the filter.
+     * Step 3: verify that the field ids are indeed Field Ids from the table. If they are not, you should return an empty dictionary. There should be a period in the field id.
+     `
 
-  const generateExploreUrl = useCallback(
+      const filterResponseInitial = await sendMessage(filterContents, {})
+
+      // check the response
+      const filterContentsCheck =
+        filterContents +
+        `
+  
+           # Output
+     
+           ${filterResponseInitial}
+     
+           # Instructions
+     
+           Verify the output, make changes and return the JSON
+     
+           `
+      const filterResponseCheck = await sendMessage(filterContentsCheck, {})
+      const filterResponseCheckJSON = parseJSONResponse(filterResponseCheck)
+
+      // Ensure filterResponseCheckJSON is an array
+      const filterResponseArray = Array.isArray(filterResponseCheckJSON) ? filterResponseCheckJSON : []
+
+      // Iterate through each filter
+      const filterResponseJSON: any = {}
+
+      // Validate each filter
+      filterResponseArray.forEach(function (filter: {
+        field_id: string
+        filter_expression: string
+      }) {
+        const field =
+          dimensions.find((d) => d.name === filter.field_id) ||
+          measures.find((m) => m.name === filter.field_id)
+
+        if (!field) {
+          console.log(`Invalid field: ${filter.field_id}`)
+          return
+        }
+
+        console.log(field)
+
+        const isValid = ExploreFilterValidator.isFilterValid(
+          field.type as FieldType,
+          filter.filter_expression,
+        )
+
+        if (!isValid) {
+          console.log(
+            `Invalid filter expression for field ${filter.field_id}: ${filter.filter_expression}`,
+          )
+          return
+        }
+
+        // Check if the field_id already exists in the hash
+        if (!filterResponseJSON[filter.field_id]) {
+          // If not, create an empty array for this field_id
+          filterResponseJSON[filter.field_id] = []
+        }
+        // Push the filter_expression into the array
+        filterResponseJSON[filter.field_id].push(filter.filter_expression)
+      })
+
+      console.log('filterResponseInitial', filterResponseInitial)
+      console.log('filterResponseCheckJSON', filterResponseCheckJSON)
+      console.log('filterResponseJSON', filterResponseJSON)
+
+      return filterResponseJSON
+    },
+    [],
+  )
+
+  const generateVisualizationParams = async (
+    exploreParams: ExploreParams,
+    prompt: string,
+  ) => {
+    const contents = `
+
+    ${looker_visualization_doc}
+
+      # User Request
+
+      ## Prompt
+
+      The user asked the following question:
+
+      \`\`\`
+      ${prompt}
+      \`\`\`
+
+      ## Explore Definition
+
+      The user is asking for the following explore definition:
+
+      \`\`\`
+      ${JSON.stringify(exploreParams)}
+      \`\`\`
+
+      ## Determine Visualization JSON
+
+      Based on the question, and on the original question, determine what the visualization config should be. The visualization config should be a JSON object that is compatible with the Looker API run_inline_query function. Only contain values that are different than the defaults. Here is an example:
+
+      \`\`\`
+      {
+        "type": "looker_column",
+      }
+      \`\`\`
+
+    `
+    const parameters = {
+      max_output_tokens: 1000,
+    }
+    const response = await sendMessage(contents, parameters)
+    return parseJSONResponse(response)
+  }
+
+  const generateBaseExploreParams = useCallback(
     async (
       prompt: string,
       dimensions: any[],
