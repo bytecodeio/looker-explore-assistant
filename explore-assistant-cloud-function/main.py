@@ -1,4 +1,3 @@
-
 # MIT License
 
 # Copyright (c) 2023 Looker Data Sciences, Inc.
@@ -26,8 +25,8 @@ import hmac
 from flask import Flask, request, Response
 from flask_cors import CORS
 import functions_framework
-import vertexai
-from vertexai.preview.generative_models import GenerativeModel, GenerationConfig
+import vertexai  # Changed import
+from langchain_community.llms import VertexAI  # Use this for LangChain integration
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -36,9 +35,9 @@ logging.basicConfig(level=logging.INFO)
 # Initialize the Vertex AI
 project = os.environ.get("PROJECT")
 location = os.environ.get("REGION")
-vertex_cf_auth_token = os.environ.get("VERTEX_CF_AUTH_TOKEN")
-model_name = os.environ.get("MODEL_NAME", "gemini-1.0-pro-001")
+model_name = os.environ.get("MODEL_NAME", "gemini-2.0-flash-lite")
 
+# Initialize Vertex AI properly
 vertexai.init(project=project, location=location)
 
 def get_response_headers(request):
@@ -56,14 +55,19 @@ def has_valid_signature(request):
         return False
 
     # Validate the signature
-    secret = vertex_cf_auth_token.encode("utf-8")
+    auth_token = os.environ.get("AI_CF_AUTH_TOKEN")
+    if not auth_token:
+        logging.error("AI_CF_AUTH_TOKEN environment variable not set")
+        return False
+
+    secret = auth_token.encode("utf-8")
     request_data = request.get_data()
     hmac_obj = hmac.new(secret, request_data, "sha256")
     expected_signature = hmac_obj.hexdigest()
 
     return hmac.compare_digest(signature, expected_signature)
 
-def generate_looker_query(contents, parameters=None, model_name="gemini-1.5-flash"):
+def generate_looker_query(contents, parameters=None, model_name="gemini-2.0-flash-lite"):
 
    # Define default parameters
     default_parameters = {
@@ -144,10 +148,12 @@ def cloud_function_entrypoint(request):
     contents = incoming_request.get("contents")
     parameters = incoming_request.get("parameters")
     if contents is None:
-        return "Missing 'contents' parameter", 400
+        return "Missing 'contents' parameter", 400, get_response_headers(request)
+
+    if not has_valid_signature(request):
+        return "Invalid signature", 403, get_response_headers(request)
 
     response_text = generate_looker_query(contents, parameters)
-
     return response_text, 200, get_response_headers(request)
 
 
@@ -163,4 +169,4 @@ if __name__ == "__main__":
         pass
     else:
         app = create_flask_app()
-        app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
+        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)), debug=False)

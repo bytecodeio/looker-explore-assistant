@@ -14,4 +14,5 @@ looker.ini
 dist
 
 explore-assistant-backend/terraform/backend.tf
-explore-assistant-cloud-function/utils/__pycache__
+__pycache__
+test_results

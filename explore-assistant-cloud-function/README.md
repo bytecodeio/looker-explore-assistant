@@ -54,6 +54,30 @@ To set up and run the function locally, follow these steps:
 
 This setup allows developers to test and modify the function in a local environment before deploying it to a cloud function service.
 
+## Setting up Looker API Credentials
+
+1. Get your API credentials from Looker:
+   - Log into Looker as an admin
+   - Go to Admin > Users
+   - Find your user and click "Edit"
+   - Under "API3 Keys", generate a new key
+
+2. Set up your credentials:
+
+   Option 1: Environment Variables (Recommended)
+   ```bash
+   export LOOKERSDK_CLIENT_ID="your_client_id"
+   export LOOKERSDK_CLIENT_SECRET="your_client_secret"
+   ```
+
+   Option 2: Update looker.ini file:
+   - Copy the example looker.ini file
+   - Fill in your client_id and client_secret
+
+3. Verify SSL settings:
+   - For development, SSL verification is disabled by default
+   - For production, set LOOKERSDK_VERIFY_SSL=true
+
 ## Model configuration
 
 By default, the cloud function will use a default model. However, you may want to test out different Gemini models are they are released. We have made the model name configurable via an environment variable. 
@@ -99,6 +123,16 @@ For running the full test suite:
    - `--skip-visualizations`: Skip visualization tests
    - `--question-id ID`: Test a specific question
    - `--question-text "text"`: Test with custom question
+
+   ex:
+   ```bash
+   cd explore-assistant-cloud-function
+   export PYTHONPATH=$PYTHONPATH:.
+   python testing/test_runner.py \
+     --questions documents/question_set.csv \
+     --output ./test_results \
+     --looker-url https://looker.bytecode.io \     --limit 2
+   ```
 
 3. View results:
    - Test results will be saved in the specified output directory

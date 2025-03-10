@@ -4,6 +4,9 @@ import urllib.parse
 from typing import Dict, Any, List, Tuple, Optional
 from looker_sdk import init40, error
 from langchain_core.messages import AIMessage
+from looker_sdk.sdk.api40 import models as looker_models
+
+logger = logging.getLogger(__name__)
 
 def init_looker_sdk():
     sdk = init40()
@@ -35,7 +38,7 @@ def execute_explore(sdk, explore_params: Dict[str, Any], result_format: str = "m
             return None, None
             
         # Create query
-        query = sdk.create_query(
+        query = looker_models.WriteQuery(
             model=model,
             view=view,
             fields=fields,
@@ -44,13 +47,16 @@ def execute_explore(sdk, explore_params: Dict[str, Any], result_format: str = "m
             limit=limit
         )
         
-        if not query or not query.id:
+        query_obj = sdk.create_query(query)
+        query_id = query_obj.id
+        
+        if not query_obj or not query_id:
             logging.error("Failed to create query")
             return None, None
             
         # Run query with requested format
         result = sdk.run_query(
-            query_id=query.id,
+            query_id=query_id,
             result_format=result_format
         )
         
@@ -60,7 +66,7 @@ def execute_explore(sdk, explore_params: Dict[str, Any], result_format: str = "m
             visualization_data = result
             # Also fetch the data in markdown format for the text response
             text_result = sdk.run_query(
-                query_id=query.id,
+                query_id=query_id,
                 result_format="md"
             )
             result = text_result
@@ -168,92 +174,279 @@ def build_explore_url(explore_params: Dict[str, Any], looker_instance_url: str =
     
     return url
 
-def execute_explore_node(state: Dict) -> Dict:
+def generate_explore_url(looker_instance_url: str, explore_params: Dict[str, Any]) -> str:
     """
-    Execute the explore with generated parameters and summarize results
-    """
-    if "explore_params" not in state:
-        logging.error("Missing explore parameters in state")
-        return state
+    Generate a Looker explore URL from the explore parameters
+    
+    Args:
+        looker_instance_url: Base URL of the Looker instance
+        explore_params: Dictionary of explore parameters
         
-    explore_params = state["explore_params"]
+    Returns:
+        Complete URL to the Looker explore
+    """
+    if not explore_params:
+        return ""
     
-    # Initialize SDK
-    sdk = init_looker_sdk()
+    model = explore_params.get("model", "")
+    explore = explore_params.get("view", "")
     
-    # Check if visualization is requested
-    request_visualization = state.get("request_visualization", False)
-    result_format = "png" if request_visualization else "md"
+    if not model or not explore:
+        logger.error("Missing model or explore in explore_params")
+        return ""
     
-    # Execute explore
-    result, visualization_data = execute_explore(sdk, explore_params, result_format)
+    # Start building URL parameters
+    url_params = []
     
-    if not result:
+    # Add fields
+    fields = explore_params.get("fields", [])
+    if fields:
+        url_params.append(f"fields={','.join(fields)}")
+    
+    # Add filters
+    filters = explore_params.get("filters", {})
+    for field, values in filters.items():
+        if isinstance(values, list):
+            value = values[0]  # Take the first value if multiple are provided
+        else:
+            value = values
+        url_params.append(f"f[{field}]={value}")
+    
+    # Add pivots
+    pivots = explore_params.get("pivots", [])
+    if pivots:
+        url_params.append(f"pivots={','.join(pivots)}")
+    
+    # Add sorts
+    sorts = explore_params.get("sorts", [])
+    if sorts:
+        url_params.append(f"sorts={','.join(sorts)}")
+    
+    # Add limit
+    limit = explore_params.get("limit")
+    if limit:
+        url_params.append(f"limit={limit}")
+    
+    # Add vis_config if provided
+    vis_config = explore_params.get("vis_config")
+    if vis_config:
+        vis_config_str = json.dumps(vis_config)
+        url_params.append(f"vis_config={vis_config_str}")
+    
+    # Combine URL parts
+    url = f"{looker_instance_url}/explore/{model}/{explore}?{('&').join(url_params)}"
+    logger.info(f"Generated explore URL: {url}")
+    
+    return url
+
+def generate_response_summary(llm, user_query: str, explore_params: Dict[str, Any], results: Any) -> str:
+    """
+    Generate a summary of the query results using LLM
+    
+    Args:
+        llm: LLM instance to use for generating the summary
+        user_query: Original user query
+        explore_params: The explore parameters used
+        results: Query results from Looker
+        
+    Returns:
+        A natural language summary of the results
+    """
+    try:
+        # Convert query results to JSON for the LLM
+        if isinstance(results, list) and results:
+            # Take only first 5 rows for summary to avoid token limits
+            sample_results = results[:5]
+            results_json = json.dumps(sample_results, indent=2)
+        else:
+            results_json = "{}"
+        
+        # Create the prompt
+        prompt = f"""
+        User Query: {user_query}
+        
+        Query Parameters: {json.dumps(explore_params, indent=2)}
+        
+        Sample Results: {results_json}
+        
+        Please provide a clear and concise summary of the query results that answers the user's question. 
+        Highlight the most important insights and include specific numbers or trends if relevant.
+        Respond directly to the user's query without mentioning that you're summarizing results.
+        """
+        
+        # Generate summary
+        summary = llm.predict(prompt)
+        return summary
+    except Exception as e:
+        logger.error(f"Error generating response summary: {e}")
+        return "I ran the query, but couldn't generate a summary of the results."
+
+def capture_visualization(sdk, query_id: str) -> bytes:
+    """
+    Capture visualization as PNG image
+    
+    Args:
+        sdk: Looker SDK instance
+        query_id: ID of the query to render
+        
+    Returns:
+        PNG image data as bytes
+    """
+    try:
+        # Get the visualization as PNG
+        result = sdk.run_query(query_id=query_id, result_format="png")
+        return result
+    except Exception as e:
+        logger.error(f"Error capturing visualization: {e}")
+        return None
+
+def execute_explore_node(state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Execute the Looker explore query and return results
+    
+    Args:
+        state: Current workflow state
+        
+    Returns:
+        Updated state with query results and visualization data
+    """
+    # Check for required state keys gracefully
+    explore_params = state.get("explore_params", {})
+    if not explore_params:
+        logger.warning("Missing explore_params in state")
         return {
             **state,
             "messages": state.get("messages", []) + [
-                AIMessage(content="Failed to execute explore query.")
+                AIMessage(content="I couldn't generate explore parameters to answer your question.")
             ]
         }
+        
+    # Try to get the SDK from state or initialize it
+    sdk = state.get("looker_sdk")
+    if not sdk:
+        logger.warning("Missing looker_sdk in state - trying to initialize")
+        try:
+            sdk = init40()
+            # Test connection
+            sdk.me()
+            logger.info("Successfully initialized Looker SDK")
+            # Update state with the SDK
+            state["looker_sdk"] = sdk
+        except error.SDKError as e:
+            logger.error(f"Failed to initialize Looker SDK: {e}")
+            return {
+                **state,
+                "messages": state.get("messages", []) + [
+                    AIMessage(content="I couldn't connect to Looker to run your query.")
+                ]
+            }
     
-    # Get the model from state, or use the model manager to get a summary model
-    llm = state.get("llm")
-    if not llm:
-        model_manager = state.get("model_manager")
-        if model_manager:
-            llm = model_manager.get_model_for_task("summarization")
+    looker_instance_url = state.get("looker_instance_url", "")
+    request_visualization = state.get("request_visualization", False)
+    user_query = state.get("user_query", "")
+    
+    try:
+        # Generate the explore URL
+        explore_url = generate_explore_url(looker_instance_url, explore_params)
+        
+        # Print the explore parameters for debugging
+        logger.info(f"Executing explore with parameters: {json.dumps(explore_params)}")
+        
+        # Prepare the query for execution
+        # Make sure we have all the required fields for the query
+        if not explore_params.get("model") or not explore_params.get("view"):
+            logger.error("Missing model or view in explore_params")
+            return {
+                **state,
+                "messages": state.get("messages", []) + [
+                    AIMessage(content="I couldn't generate a valid query because the model or view information is missing.")
+                ]
+            }
+            
+        if not explore_params.get("fields"):
+            logger.warning("No fields specified in explore_params")
+            explore_params["fields"] = []  # Ensure fields is at least an empty list
+        
+        # Use proper WriteQuery object instead of keyword arguments
+        query = looker_models.WriteQuery(
+            model=explore_params.get("model"),
+            view=explore_params.get("view"),
+            fields=explore_params.get("fields", []),
+            filters=explore_params.get("filters", {}),
+            pivots=explore_params.get("pivots", []),
+            sorts=explore_params.get("sorts", []),
+            limit=explore_params.get("limit"),
+            vis_config=explore_params.get("vis_config", {}),
+            filter_expression=explore_params.get("filter_expression", None)
+        )
+        
+        # Log the query before execution
+        logger.info(f"Creating query for {explore_params.get('model')}.{explore_params.get('view')}")
+        
+        # Create and run the query
+        query_obj = sdk.create_query(query)
+        query_id = query_obj.id
+        
+        if not query_id:
+            logger.error("Failed to create query object")
+            return {
+                **state,
+                "messages": state.get("messages", []) + [
+                    AIMessage(content="I couldn't create a valid query in Looker.")
+                ]
+            }
+        
+        # Run the query and get JSON results
+        logger.info(f"Executing query with ID: {query_id}")
+        results = sdk.run_query(query_id=query_id, result_format="json")
+        
+        # Parse JSON results if needed
+        if isinstance(results, bytes) or isinstance(results, str):
+            try:
+                parsed_results = json.loads(results)
+                logger.info(f"Query returned {len(parsed_results)} results")
+            except json.JSONDecodeError:
+                logger.error("Failed to parse JSON results")
+                parsed_results = []
         else:
-            # Fallback if no model is provided
-            from langchain.llms import VertexAI
-            llm = VertexAI(
-                model_name="gemini-pro",
-                max_output_tokens=1024,
-                temperature=0
-            )
-    
-    # Summarize results
-    summary = summarize_data(llm, result)
-    
-    # Extract query details for display
-    model_name = explore_params.get("model", "")
-    explore_name = explore_params.get("view", "")
-    fields = explore_params.get("fields", [])
-    filters = explore_params.get("filters", {})
-    
-    # Format a user-friendly description of the query
-    fields_description = ", ".join(fields)
-    filters_description = ", ".join([f"{k}: {v}" for k, v in filters.items()])
-    
-    # Build explore URL
-    looker_instance_url = state.get("looker_instance_url", "https://your-looker-instance.cloud.looker.com")
-    explore_url = build_explore_url(explore_params, looker_instance_url)
-    
-    # Format the response with both summary and URL
-    query_description = f"""
-## Data Summary
-{summary}
-
-## Query Details
-- Model: {model_name}
-- Explore: {explore_name}
-- Fields: {fields_description}
-- Filters: {filters_description}
-    """
-    
-    # Update state with results
-    updated_state = {
-        **state,
-        "explore_result": result,
-        "explore_summary": summary,
-        "explore_url": explore_url,
-        "messages": state.get("messages", []) + [
-            AIMessage(content=query_description),
-            AIMessage(content=f"## Explore URL\nYou can view and modify this explore directly in Looker by clicking this link:\n\n[Open in Looker]({explore_url})")
-        ]
-    }
-    
-    # Add visualization data if available
-    if visualization_data:
-        updated_state["visualization_data"] = visualization_data
-    
-    return updated_state
+            parsed_results = results
+        
+        # Get visualization if requested
+        visualization_data = None
+        if request_visualization:
+            logger.info("Requesting visualization")
+            visualization_data = capture_visualization(sdk, query_id)
+        
+        # Generate result summary using LLM
+        llm = state.get("llm")
+        if llm and parsed_results:
+            logger.info("Generating summary of query results")
+            summary = generate_response_summary(llm, user_query, explore_params, parsed_results)
+        else:
+            if not parsed_results:
+                summary = "I ran the query, but no data was returned. You might want to check your filters."
+            else:
+                summary = "I ran the query successfully, but couldn't generate a summary."
+        
+        # Update state with results and provide explore URL in the message
+        updated_state = {
+            **state,
+            "explore_url": explore_url,
+            "query_results": parsed_results,
+            "visualization_data": visualization_data,
+            "messages": state.get("messages", []) + [
+                AIMessage(content=f"{summary}\n\nYou can view and explore this data further here: {explore_url}")
+            ]
+        }
+        
+        return updated_state
+        
+    except Exception as e:
+        logger.error(f"Error executing explore: {e}")
+        return {
+            **state,
+            "error": str(e),
+            "messages": state.get("messages", []) + [
+                AIMessage(content=f"I encountered an error while running your query: {str(e)}")
+            ]
+        }

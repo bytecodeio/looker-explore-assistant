@@ -1,9 +1,13 @@
 import logging
 import json
+import re
+import os
 from datetime import datetime
 from typing import Dict, List, Any
 from langchain_core.messages import AIMessage
 from langchain_core.language_models import BaseLLM
+# Update import to use the correct package
+from langchain_google_vertexai import VertexAI
 
 from utils.document_loader import DocumentLoader
 from utils.query_analyzer import QueryAnalyzer
@@ -48,8 +52,7 @@ def generate_shared_context(dimensions: List[Dict], measures: List[Dict], user_q
     looker_filter_doc = DocumentLoader.get_filter_doc()
     looker_filters_interval_tf = DocumentLoader.get_intervals_doc()
     
-    # Conditionally load visualization and pivot docs based on query analysis
-    llm = VertexAI(model_name="gemini-pro", max_output_tokens=1024, temperature=0)
+    # Remove the model initialization attempt - we'll use the model provided in state
     
     # Analyze the query to determine doc requirements
     needs_visualization = QueryAnalyzer.needs_visualization(user_query)
@@ -121,6 +124,24 @@ def generate_shared_context(dimensions: List[Dict], measures: List[Dict], user_q
       # End LookML Metadata
     """
 
+def extract_json_from_response(response: str) -> str:
+    """
+    Extract JSON content from a response that may contain markdown code blocks
+    
+    Args:
+        response: Response string that may include markdown formatting
+        
+    Returns:
+        Clean JSON string without markdown formatting
+    """
+    # Check if the response has a code block
+    json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response, re.MULTILINE)
+    if (json_match):
+        return json_match.group(1).strip()
+    
+    # No code block found, return the response as is
+    return response.strip()
+
 def generate_filter_params(llm: BaseLLM, prompt: str, shared_context: str, dimensions: List[Dict], measures: List[Dict]) -> Dict:
     """Generate filter parameters for the explore using the provided LLM"""
     filter_contents = f"""
@@ -146,9 +167,12 @@ def generate_filter_params(llm: BaseLLM, prompt: str, shared_context: str, dimen
     try:
         filter_response = llm.predict(filter_contents)
         
-        # Try to parse the JSON response
+        # Extract JSON from potentially markdown-formatted response
+        clean_json_str = extract_json_from_response(filter_response)
+        
+        # Try to parse the cleaned JSON response
         try:
-            filter_response_json = json.loads(filter_response)
+            filter_response_json = json.loads(clean_json_str)
             
             if not isinstance(filter_response_json, list):
                 logging.warning("Filter response is not a list, returning empty dict")
@@ -184,7 +208,7 @@ def generate_filter_params(llm: BaseLLM, prompt: str, shared_context: str, dimen
             return filter_dict
                 
         except json.JSONDecodeError:
-            logging.error(f"Failed to parse filter response as JSON: {filter_response}")
+            logging.error(f"Failed to parse filter response as JSON: {clean_json_str}")
             return {}
             
     except Exception as e:
@@ -230,11 +254,14 @@ def generate_base_explore_params(llm: BaseLLM, prompt: str, shared_context: str,
     try:
         response = llm.predict(contents)
         
+        # Extract JSON from potentially markdown-formatted response
+        clean_json_str = extract_json_from_response(response)
+        
         try:
-            response_json = json.loads(response)
+            response_json = json.loads(clean_json_str)
             return response_json
         except json.JSONDecodeError:
-            logging.error(f"Failed to parse response as JSON: {response}")
+            logging.error(f"Failed to parse response as JSON: {clean_json_str}")
             return {}
             
     except Exception as e:

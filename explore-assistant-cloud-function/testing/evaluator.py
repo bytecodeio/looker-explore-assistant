@@ -62,14 +62,14 @@ class LLMEvaluator:
     Uses an LLM to evaluate the quality of responses and visualizations from the Looker Explore Assistant
     """
     
-    def __init__(self, model_manager: ModelManager = None):
+    def __init__(self, model_manager: ModelManager):
         """
         Initialize the LLM evaluator
         
         Args:
             model_manager: ModelManager instance for accessing LLMs
         """
-        self.model_manager = model_manager or ModelManager()
+        self.model_manager = model_manager
     
     def _extract_explore_details(self, explore_url: str) -> Dict[str, Any]:
         """
@@ -296,3 +296,8 @@ Include specific reasons for your scores and actionable suggestions for improvem
                 "visualization_score": 0.0,
                 "overall_score": 0.0
             }
+    
+    def _validate_response_format(self, response_text: str, explore_url: str) -> dict:
+        """Quick validation using the fast model"""
+        model = self.model_manager.get_fast_model()
+        # ... validation logic ...

@@ -3,6 +3,10 @@ from typing import Dict, Any, Optional
 from langchain_core.messages import HumanMessage, AIMessage
 from langsmith import trace
 from langchain.chains.base import Chain
+from pydantic import BaseModel, Field
+from looker_sdk.sdk.api40.methods import Looker40SDK
+import looker_sdk
+from looker_sdk import error as looker_error
 
 # Import existing nodes
 from nodes.user_query_node import user_query_node
@@ -21,16 +25,17 @@ from nodes.example_storage_node import example_storage_node
 # Import utils
 from utils.model_manager import ModelManager
 
-class LookerExploreWorkflow(Chain):
+class LookerExploreWorkflow(Chain, BaseModel):
     """
     A workflow that processes user queries and generates Looker explores
     """
+    model_manager: ModelManager = Field(default_factory=ModelManager)
+    looker_instance_url: str = Field(default="https://your-looker-instance.cloud.looker.com")
+    conversation_state: Dict[str, Any] = Field(default_factory=dict, exclude=True)
+    looker_sdk: Optional[Looker40SDK] = Field(default=None)
     
-    def __init__(self, model_manager: ModelManager = None, looker_instance_url: str = None):
-        super().__init__()
-        self.model_manager = model_manager or ModelManager()
-        self.looker_instance_url = looker_instance_url or "https://your-looker-instance.cloud.looker.com"
-        self._conversation_state = {}
+    class Config:
+        arbitrary_types_allowed = True
         
     @property
     def input_keys(self) -> list:
@@ -52,7 +57,7 @@ class LookerExploreWorkflow(Chain):
         """
         # Start with previous state + new user feedback
         state = {
-            **self._conversation_state,
+            **self.conversation_state,
             "user_feedback": inputs["query"]
         }
         
@@ -95,7 +100,7 @@ class LookerExploreWorkflow(Chain):
             state["messages"].append(AIMessage(content="Thank you for your feedback!"))
             
         # Update conversation state
-        self._conversation_state = state
+        self.conversation_state = state
         
         # Compile final response
         content_messages = [msg.content for msg in state.get("messages", []) if hasattr(msg, "content")]
@@ -119,7 +124,7 @@ class LookerExploreWorkflow(Chain):
         """
         # Start with previous state + user response
         state = {
-            **self._conversation_state,
+            **self.conversation_state,
             "user_response": inputs["query"]
         }
         
@@ -129,7 +134,7 @@ class LookerExploreWorkflow(Chain):
             span.add_outputs({"state": state})
             
         # Update conversation state
-        self._conversation_state = state
+        self.conversation_state = state
         
         # Compile final response
         content_messages = [msg.content for msg in state.get("messages", []) if hasattr(msg, "content")]
@@ -141,82 +146,116 @@ class LookerExploreWorkflow(Chain):
             "visualization_data": state.get("visualization_data", None)
         }
 
-    @trace
     def _call(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the workflow pipeline"""
-        # Check if this is feedback on a previous explore or verification of a regenerated explore
-        if hasattr(self, '_conversation_state') and self._conversation_state:
-            if self._conversation_state.get("awaiting_verification", False):
-                # This is a verification response
-                return self._process_verification(inputs)
-            elif self._conversation_state.get("explore_url"):
-                # This is feedback on the previous explore
-                return self._process_feedback(inputs)
-        
-        # This is a new query - initialize state
-        state = {
-            "user_query": inputs["query"],
-            "model_manager": self.model_manager,
-            "looker_instance_url": self.looker_instance_url,
-            "request_visualization": inputs.get("request_visualization", False)
-        }
-        
-        # Process user query
-        with trace("user_query_processing") as span:
-            state = user_query_node(state)
-            span.add_outputs({"state": state})
-        
-        # Select relevant explore
-        with trace("explore_selection") as span:
-            explore_selection_model = self.model_manager.get_model_for_task("explore_selection")
-            state["llm"] = explore_selection_model
-            state = explore_selector_node(state)
-            span.add_outputs({"state": state})
+        try:
+            # Initialize SDK if it doesn't exist
+            if not self.looker_sdk:
+                try:
+                    # Try to initialize the SDK
+                    self.looker_sdk = looker_sdk.init40()
+                    # Test connection
+                    self.looker_sdk.me()
+                    logger.info("Successfully initialized Looker SDK")
+                except looker_error.SDKError as e:
+                    logger.error(f"Failed to initialize Looker SDK: {e}")
+                    return {
+                        "response": f"I couldn't connect to Looker: {str(e)}",
+                        "explore_url": "",
+                        "visualization_data": None
+                    }
             
-        # If no explore was selected, return early
-        if "selected_explore" not in state:
-            return {"response": "I couldn't determine which data explore to use for your question.", "explore_url": ""}
-        
-        # Fetch semantic model for selected explore
-        with trace("semantic_model_loading") as span:
-            state = semantic_model_node(state)
-            span.add_outputs({"state": state})
+            # Check if this is feedback on a previous explore
+            if self.conversation_state:
+                if self.conversation_state.get("awaiting_verification", False):
+                    # This is a verification response
+                    return self._process_verification(inputs)
+                elif self.conversation_state.get("explore_url"):
+                    # This is feedback on the previous explore
+                    return self._process_feedback(inputs)
             
-        # If semantic model failed to load, return early
-        if "semantic_model" not in state:
-            return {"response": "I couldn't load the necessary data model to answer your question.", "explore_url": ""}
-        
-        # Generate explore parameters
-        with trace("explore_params_generation") as span:
-            params_model = self.model_manager.get_model_for_task("explore_params_generation")
-            state["llm"] = params_model
-            state = explore_params_generator_node(state)
-            span.add_outputs({"state": state})
-        
-        # Fetch filter values if needed
-        with trace("filter_value_fetching") as span:
-            filter_model = self.model_manager.get_model_for_task("filter_selection")
-            state["llm"] = filter_model
-            state = filter_value_fetcher_node(state)
-            span.add_outputs({"state": state})
+            # Create initial state with SDK included
+            state = {
+                "user_query": inputs["query"],
+                "model_manager": self.model_manager,
+                "looker_instance_url": self.looker_instance_url,
+                "request_visualization": inputs.get("request_visualization", False),
+                "messages": [],
+                "looker_sdk": self.looker_sdk  # Ensure SDK is in state
+            }
             
-        # Execute explore and get results
-        with trace("explore_execution") as span:
-            summary_model = self.model_manager.get_model_for_task("summarization")
-            state["llm"] = summary_model
-            state = execute_explore_node(state)
-            span.add_outputs({"state": state})
+            # Process user query
+            with trace("user_query_processing") as span:
+                state = user_query_node(state)
+                span.add_outputs({"state": state})
             
-        # Store the state for potential future feedback
-        self._conversation_state = state
+            # Select relevant explore
+            with trace("explore_selection") as span:
+                explore_selection_model = self.model_manager.get_model_for_task("explore_selection")
+                state["llm"] = explore_selection_model
+                state = explore_selector_node(state)
+                span.add_outputs({"state": state})
+                
+            # If no explore was selected, return early
+            if "selected_explore" not in state:
+                return {
+                    "response": "I couldn't determine which data explore to use for your question.", 
+                    "explore_url": "",
+                    "visualization_data": None
+                }
             
-        # Compile final response
-        content_messages = [msg.content for msg in state.get("messages", []) if hasattr(msg, "content")]
-        text_response = "\n\n".join(content_messages[:-1] if len(content_messages) > 1 else content_messages)
-        
-        # Return both text response and URL
-        return {
-            "response": text_response,
-            "explore_url": state.get("explore_url", ""),
-            "visualization_data": state.get("visualization_data", None)
-        }
+            # Fetch semantic model for selected explore
+            with trace("semantic_model_loading") as span:
+                state = semantic_model_node(state)
+                span.add_outputs({"state": state})
+                
+            # If semantic model failed to load, return early
+            if "semantic_model" not in state:
+                return {
+                    "response": "I couldn't load the necessary data model to answer your question.", 
+                    "explore_url": "",
+                    "visualization_data": None
+                }
+            
+            # Generate explore parameters
+            with trace("explore_params_generation") as span:
+                params_model = self.model_manager.get_model_for_task("explore_params_generation")
+                state["llm"] = params_model
+                state = explore_params_generator_node(state)
+                span.add_outputs({"state": state})
+            
+            # Fetch filter values if needed
+            with trace("filter_value_fetching") as span:
+                filter_model = self.model_manager.get_model_for_task("filter_selection")
+                state["llm"] = filter_model
+                state = filter_value_fetcher_node(state)
+                span.add_outputs({"state": state})
+                
+            # Execute explore and get results
+            with trace("explore_execution") as span:
+                summary_model = self.model_manager.get_model_for_task("summarization")
+                state["llm"] = summary_model
+                state = execute_explore_node(state)
+                span.add_outputs({"state": state})
+                
+            # Store the state for potential future feedback
+            self.conversation_state = state
+                
+            # Compile final response
+            content_messages = [msg.content for msg in state.get("messages", []) if hasattr(msg, "content")]
+            text_response = "\n\n".join(content_messages[:-1] if len(content_messages) > 1 else content_messages)
+            
+            # Return response with all required fields
+            return {
+                "response": text_response,
+                "explore_url": state.get("explore_url", ""),
+                "visualization_data": state.get("visualization_data", None)
+            }
+            
+        except Exception as e:
+            logging.error(f"Error in workflow execution: {e}")
+            return {
+                "response": f"An error occurred while processing your request: {str(e)}",
+                "explore_url": "",
+                "visualization_data": None
+            }

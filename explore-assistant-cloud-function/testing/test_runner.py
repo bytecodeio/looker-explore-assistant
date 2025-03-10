@@ -14,6 +14,9 @@ from image_handler import ImageHandler
 from workflow import LookerExploreWorkflow
 from utils.model_manager import ModelManager
 
+import looker_sdk
+from looker_sdk import error
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -71,9 +74,9 @@ def run_single_test(workflow: LookerExploreWorkflow, question: Dict[str, str],
         # Remove any numeric prefix (e.g., "12. ")
         clean_question = question_text.split('.', 1)[1].strip() if '.' in question_text else question_text
         
-        # Execute workflow with PNG visualization request
+        # Execute workflow with PNG visualization request - use invoke() instead of __call__
         start_time = datetime.now()
-        response = workflow({"query": clean_question, "request_visualization": True})
+        response = workflow.invoke({"query": clean_question, "request_visualization": True})
         end_time = datetime.now()
         
         # Extract visualization data if available
@@ -125,22 +128,41 @@ def run_single_test(workflow: LookerExploreWorkflow, question: Dict[str, str],
             "timestamp": datetime.now().isoformat()
         }
 
+def init_looker_sdk(looker_url: str) -> looker_sdk.sdk.api40.methods.Looker40SDK:
+    """Initialize Looker SDK using ini file and environment variables"""
+    # Set environment variables for Looker SDK
+    os.environ["LOOKERSDK_BASE_URL"] = looker_url
+    os.environ["LOOKERSDK_VERIFY_SSL"] = "false"
+    
+    # Get credentials from environment
+    client_id = os.environ.get("LOOKERSDK_CLIENT_ID")
+    client_secret = os.environ.get("LOOKERSDK_CLIENT_SECRET")
+    
+    if not client_id or not client_secret:
+        logger.error("Missing Looker API credentials. Please set LOOKERSDK_CLIENT_ID and LOOKERSDK_CLIENT_SECRET environment variables")
+        raise ValueError("Missing Looker API credentials")
+    
+    # Point to the ini file
+    os.environ["LOOKERSDK_INI"] = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), 
+        "looker.ini"
+    )
+    
+    try:
+        sdk = looker_sdk.init40()
+        # Test connection
+        sdk.me()
+        logger.info("Successfully connected to Looker API")
+        return sdk
+    except error.SDKError as e:
+        logger.error(f"Failed to initialize Looker SDK: {e}")
+        raise
+
 def run_batch_test(questions: List[Dict[str, str]], 
                   config: Dict[str, Any], 
                   output_dir: str,
                   limit: Optional[int] = None) -> Dict[str, Any]:
-    """
-    Run a batch of test questions and generate reports
-    
-    Args:
-        questions: List of question dictionaries
-        config: Configuration for the test run
-        output_dir: Directory to save test results
-        limit: Optional limit to the number of questions to process
-        
-    Returns:
-        Dictionary with summary statistics
-    """
+    """Run batch test with proper environment setup"""
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     
@@ -148,11 +170,36 @@ def run_batch_test(questions: List[Dict[str, str]],
     images_dir = os.path.join(output_dir, "visualizations")
     os.makedirs(images_dir, exist_ok=True)
     
+    # Set Vertex AI environment variables if not set
+    if not os.environ.get("PROJECT"):
+        os.environ["PROJECT"] = "your-gcp-project"  # Set a default or get from config
+    if not os.environ.get("REGION"):
+        os.environ["REGION"] = "us-central1"  # Set a default or get from config
+        
+    # Initialize Vertex AI
+    import vertexai
+    try:
+        vertexai.init(
+            project=os.environ.get("PROJECT"),
+            location=os.environ.get("REGION")
+        )
+        logger.info(f"Initialized Vertex AI with project {os.environ.get('PROJECT')}")
+    except Exception as e:
+        logger.warning(f"Could not initialize Vertex AI: {e}")
+    
+    # Initialize Looker SDK
+    try:
+        sdk = init_looker_sdk(config.get("looker_instance_url"))
+    except Exception as e:
+        logger.error(f"Failed to initialize Looker SDK: {e}")
+        raise
+    
     # Initialize components
     model_manager = ModelManager()
     workflow = LookerExploreWorkflow(
         model_manager=model_manager,
-        looker_instance_url=config.get("looker_instance_url", "")
+        looker_instance_url=config.get("looker_instance_url", ""),
+        looker_sdk=sdk  # Pass initialized SDK to workflow
     )
     evaluator = LLMEvaluator(model_manager)
     image_handler = ImageHandler(screenshot_dir=images_dir)
