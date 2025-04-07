@@ -51,8 +51,7 @@ def main():
 
     # Request payload
     data = {
-        "contents": "What was the revenue yesterday        # For Mac (using Homebrew)
-        brew install gcc?",
+        "contents": "What was the revenue yesterday?",
         "parameters": {"max_output_tokens": 1000}
     }
 
