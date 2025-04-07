@@ -138,3 +138,16 @@ For running the full test suite:
    - Test results will be saved in the specified output directory
    - Check `summary_report.html` and `detailed_report.html` for test results
    - Visualizations are stored in the `visualizations` subdirectory
+
+
+## Q&A / Troubleshooting
+
+1. Google-crc32c Warnings - install the following system dependencies before trying again 
+
+`brew install gcc`
+`pip uninstall google-crc32c -y`
+`ARCHFLAGS="-arch x86_64" pip install --no-cache-dir google-crc32c`
+
+2. Missing modules 
+Add module to the requirements.txt file 
+Run `pip install -r requirements.txt`

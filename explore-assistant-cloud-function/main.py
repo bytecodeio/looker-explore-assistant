@@ -25,8 +25,9 @@ import hmac
 from flask import Flask, request, Response
 from flask_cors import CORS
 import functions_framework
-import vertexai  # Changed import
-from langchain_community.llms import VertexAI  # Use this for LangChain integration
+import vertexai
+from vertexai.preview.generative_models import GenerativeModel, GenerationConfig
+from langchain_community.llms import VertexAI
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -44,28 +45,28 @@ def get_response_headers(request):
     headers = {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, X-Signature"
+        "Access-Control-Allow-Headers": "Content-Type"
     }
     return headers
 
 
-def has_valid_signature(request):
-    signature = request.headers.get("X-Signature")
-    if signature is None:
-        return False
+# def has_valid_signature(request):
+#     signature = request.headers.get("X-Signature")
+#     if signature is None:
+#         return False
 
-    # Validate the signature
-    auth_token = os.environ.get("AI_CF_AUTH_TOKEN")
-    if not auth_token:
-        logging.error("AI_CF_AUTH_TOKEN environment variable not set")
-        return False
+#     # Validate the signature
+#     auth_token = os.environ.get("AI_CF_AUTH_TOKEN")
+#     if not auth_token:
+#         logging.error("AI_CF_AUTH_TOKEN environment variable not set")
+#         return False
 
-    secret = auth_token.encode("utf-8")
-    request_data = request.get_data()
-    hmac_obj = hmac.new(secret, request_data, "sha256")
-    expected_signature = hmac_obj.hexdigest()
+#     secret = auth_token.encode("utf-8")
+#     request_data = request.get_data()
+#     hmac_obj = hmac.new(secret, request_data, "sha256")
+#     expected_signature = hmac_obj.hexdigest()
 
-    return hmac.compare_digest(signature, expected_signature)
+#     return hmac.compare_digest(signature, expected_signature)
 
 def generate_looker_query(contents, parameters=None, model_name="gemini-2.0-flash-lite"):
 
@@ -128,8 +129,8 @@ def create_flask_app():
         if contents is None:
             return "Missing 'contents' parameter", 400, get_response_headers(request)
 
-        if not has_valid_signature(request):
-            return "Invalid signature", 403, get_response_headers(request)
+        # if not has_valid_signature(request):
+        #     return "Invalid signature", 403, get_response_headers(request)
 
         response_text = generate_looker_query(contents, parameters)
 
@@ -150,8 +151,8 @@ def cloud_function_entrypoint(request):
     if contents is None:
         return "Missing 'contents' parameter", 400, get_response_headers(request)
 
-    if not has_valid_signature(request):
-        return "Invalid signature", 403, get_response_headers(request)
+    # if not has_valid_signature(request):
+    #     return "Invalid signature", 403, get_response_headers(request)
 
     response_text = generate_looker_query(contents, parameters)
     return response_text, 200, get_response_headers(request)

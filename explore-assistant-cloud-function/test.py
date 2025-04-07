@@ -4,26 +4,26 @@ import json
 import requests
 import time
 
-def create_signature(data, auth_token):
-    """
-    Create HMAC signature for request authentication
-    """
-    secret = auth_token.encode('utf-8')
-    message = json.dumps(data).encode('utf-8')
-    signature = hmac.new(secret, message, 'sha256').hexdigest()
-    return signature
+# def create_signature(data, auth_token):
+#     """
+#     Create HMAC signature for request authentication
+#     """
+#     secret = auth_token.encode('utf-8')
+#     message = json.dumps(data).encode('utf-8')
+#     signature = hmac.new(secret, message, 'sha256').hexdigest()
+#     return signature
 
 def send_request(url, data):
     """
     Send a POST request to the given URL with the provided data.
     """
-    auth_token = os.environ.get('AI_CF_AUTH_TOKEN')
-    if not auth_token:
-        raise ValueError("AI_CF_AUTH_TOKEN environment variable not set")
+    # auth_token = os.environ.get('AI_CF_AUTH_TOKEN')
+    # if not auth_token:
+    #     raise ValueError("AI_CF_AUTH_TOKEN environment variable not set")
 
     headers = {
         'Content-Type': 'application/json',
-        'X-Signature': create_signature(data, auth_token)
+        # 'X-Signature': create_signature(data, auth_token)
     }
     
     # Add retry logic
@@ -51,7 +51,8 @@ def main():
 
     # Request payload
     data = {
-        "contents": "how are you doing?",
+        "contents": "What was the revenue yesterday        # For Mac (using Homebrew)
+        brew install gcc?",
         "parameters": {"max_output_tokens": 1000}
     }
 

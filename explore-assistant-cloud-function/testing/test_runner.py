@@ -5,12 +5,16 @@ import logging
 import argparse
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
+import sys
+from langchain_community.llms import VertexAI as vertexai
 
+# Add parent directory to Python path before other imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Local imports without relative dots
 from evaluator import LLMEvaluator
 from report_generator import generate_summary_report, generate_detailed_report
 from image_handler import ImageHandler
-
-# Import the workflow to test
 from workflow import LookerExploreWorkflow
 from utils.model_manager import ModelManager
 
@@ -177,7 +181,8 @@ def run_batch_test(questions: List[Dict[str, str]],
         os.environ["REGION"] = "us-central1"  # Set a default or get from config
         
     # Initialize Vertex AI
-    import vertexai
+    
+
     try:
         vertexai.init(
             project=os.environ.get("PROJECT"),
