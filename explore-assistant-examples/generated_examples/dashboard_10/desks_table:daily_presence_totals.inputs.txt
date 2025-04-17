@@ -1,0 +1,14 @@
+[
+    {
+        "input": "What are the daily presence event counts for each site, sorted by site name and date?",
+        "output": "fields=daily_presence_totals.site_name,daily_presence_totals.presence_events_count,daily_presence_totals.presence_date&pivots=daily_presence_totals.site_name&fill_fields=daily_presence_totals.presence_date&sorts=daily_presence_totals.site_name,daily_presence_totals.presence_date desc&limit=500&column_limit=50&vis={\\\"type\\\":\\\"linear\\\"}"
+    },
+    {
+        "input": "What are the daily presence event counts for each site, sorted by site name and date?",
+        "output": "fields=daily_presence_totals.site_name,daily_presence_totals.presence_events_count,daily_presence_totals.presence_date&pivots=daily_presence_totals.site_name&fill_fields=daily_presence_totals.presence_date&sorts=daily_presence_totals.site_name,daily_presence_totals.presence_date desc&limit=500&column_limit=50&vis={\\\"type\\\":\\\"linear\\\"}"
+    },
+    {
+        "input": "What are the total number of presence events for each site, sorted by site name and date?",
+        "output": "fields=daily_presence_totals.site_name,daily_presence_totals.presence_events_count,daily_presence_totals.presence_date&pivots=daily_presence_totals.site_name&fill_fields=daily_presence_totals.presence_date&sorts=daily_presence_totals.site_name,daily_presence_totals.presence_date desc&limit=500&column_limit=50&vis={\\\"type\\\":\\\"linear\\\"}"
+    }
+]

@@ -1,0 +1,166 @@
+
+    Dimensions Used to group by information:
+ name: daily_presence_peak.pk_day, type: date, description:  
+name: daily_presence_peak.site_id, type: string, description:  
+name: daily_presence_peak.total, type: number, description:  
+name: daily_presence_totals.employee_first_name, type: string, description: Employee's first name 
+name: daily_presence_totals.employee_last_name, type: string, description: Employee's last name 
+name: daily_presence_totals.presence_date, type: date_date, description: The date on which the presence activity was detected 
+name: daily_presence_totals.presence_day_of_week, type: date_day_of_week, description: The date on which the presence activity was detected 
+name: daily_presence_totals.employee_full_name, type: string, description: Employee's full name 
+name: daily_presence_totals.employee_id, type: string, description: Client defined employee ID 
+name: daily_presence_totals.presence_month, type: date_month, description: The date on which the presence activity was detected 
+name: daily_presence_totals.presence_quarter, type: date_quarter, description: The date on which the presence activity was detected 
+name: daily_presence_totals.presence_raw, type: date_raw, description: The date on which the presence activity was detected 
+name: daily_presence_totals.presence_week, type: date_week, description: The date on which the presence activity was detected 
+name: daily_presence_totals.presence_year, type: date_year, description: The date on which the presence activity was detected 
+name: daily_presence_totals.client_id, type: string, description:  
+name: daily_presence_totals.cost_center, type: string, description:  
+name: daily_presence_totals.day, type: string, description:  
+name: daily_presence_totals.day_of_week_label, type: string, description:  
+name: daily_presence_totals.department, type: string, description: The name of the employee's department 
+name: daily_presence_totals.distinct_days_in_month, type: number, description:  
+name: daily_presence_totals.distinct_days_in_week, type: number, description:  
+name: daily_presence_totals.employee_day_key, type: string, description: Unique employee+day key 
+name: daily_presence_totals.employee_internal_id, type: string, description: OSS defined employee ID 
+name: daily_presence_totals.last_badge_presence, type: yesno, description:  
+name: daily_presence_totals.last_badge_presence_date, type: date_date, description:  
+name: daily_presence_totals.last_badge_presence_month, type: date_month, description:  
+name: daily_presence_totals.last_badge_presence_quarter, type: date_quarter, description:  
+name: daily_presence_totals.last_badge_presence_raw, type: date_raw, description:  
+name: daily_presence_totals.last_badge_presence_time, type: date_time, description:  
+name: daily_presence_totals.last_badge_presence_week, type: date_week, description:  
+name: daily_presence_totals.last_badge_presence_year, type: date_year, description:  
+name: daily_presence_totals.last_wifi_presence, type: yesno, description:  
+name: daily_presence_totals.last_wifi_presence_date, type: date_date, description:  
+name: daily_presence_totals.last_wifi_presence_month, type: date_month, description:  
+name: daily_presence_totals.last_wifi_presence_quarter, type: date_quarter, description:  
+name: daily_presence_totals.last_wifi_presence_raw, type: date_raw, description:  
+name: daily_presence_totals.last_wifi_presence_time, type: date_time, description:  
+name: daily_presence_totals.last_wifi_presence_week, type: date_week, description:  
+name: daily_presence_totals.last_wifi_presence_year, type: date_year, description:  
+name: daily_presence_totals.presence_primary_key, type: string, description:  
+name: daily_presence_totals.site_id, type: string, description: Unique identifier for the site where presence activity was detected 
+name: daily_presence_totals.site_name, type: string, description: Name of the Site where the precence activity was detected 
+name: daily_presence_totals.team, type: string, description: Team to which an employee belongs 
+name: daily_presence_totals.title, type: string, description: Employee's job title 
+name: presence_dates.day, type: string, description:  
+name: presence_dates.day_date, type: date_date, description:  
+name: presence_dates.day_day_of_week, type: date_day_of_week, description:  
+name: presence_dates.day_month, type: date_month, description:  
+name: presence_dates.day_quarter, type: date_quarter, description:  
+name: presence_dates.day_raw, type: date_raw, description:  
+name: presence_dates.day_week, type: date_week, description:  
+name: presence_dates.day_year, type: date_year, description:  
+name: month_day_count.days_count_distinct, type: number, description:  
+name: week_day_count.days_count_distinct, type: number, description:  
+name: desks_table_view.client_id, type: string, description:  
+name: desks_table_view.day_date, type: date_date, description:  
+name: desks_table_view.day_month, type: date_month, description:  
+name: desks_table_view.day_quarter, type: date_quarter, description:  
+name: desks_table_view.day_raw, type: date_raw, description:  
+name: desks_table_view.day_week, type: date_week, description:  
+name: desks_table_view.day_year, type: date_year, description:  
+name: desks_table_view.desk_active, type: yesno, description:  
+name: desks_table_view.desk_assignment_type, type: number, description:  
+name: desks_table_view.desk_deleted, type: yesno, description:  
+name: desks_table_view.desk_id, type: string, description: The unique identifier for a desk 
+name: desks_table_view.desk_name, type: string, description: The name of a desk 
+name: desks_table_view.effective_date, type: date_date, description:  
+name: desks_table_view.effective_month, type: date_month, description:  
+name: desks_table_view.effective_quarter, type: date_quarter, description:  
+name: desks_table_view.effective_raw, type: date_raw, description:  
+name: desks_table_view.effective_time, type: date_time, description:  
+name: desks_table_view.effective_week, type: date_week, description:  
+name: desks_table_view.effective_year, type: date_year, description:  
+name: desks_table_view.floor_id, type: string, description: The unique identifier for the floor the desk is on 
+name: desks_table_view.floor_name, type: string, description: The name of the floor the desk is on 
+name: desks_table_view.has_always_shift, type: yesno, description:  
+name: desks_table_view.has_day_of_week_shift, type: yesno, description:  
+name: desks_table_view.has_shift, type: yesno, description:  
+name: desks_table_view.has_week_of_year_shift, type: yesno, description:  
+name: desks_table_view.primary_key, type: string, description:  
+name: desks_table_view.reserved_desk, type: string, description:  
+name: desks_table_view.row_creation_date, type: date_date, description:  
+name: desks_table_view.row_creation_month, type: date_month, description:  
+name: desks_table_view.row_creation_quarter, type: date_quarter, description:  
+name: desks_table_view.row_creation_raw, type: date_raw, description:  
+name: desks_table_view.row_creation_time, type: date_time, description:  
+name: desks_table_view.row_creation_week, type: date_week, description:  
+name: desks_table_view.row_creation_year, type: date_year, description:  
+name: desks_table_view.site_id, type: string, description: Unique identifier for the Site the desk is on 
+name: desks_table_view.site_name, type: string, description: The name of the Site where the desk is located 
+name: desks_table_view.site_time_zone, type: string, description:  
+name: month_day_count.employee_internal_id, type: string, description:  
+name: week_day_count.employee_internal_id, type: string, description:  
+name: group_monthly_site_attendance_weekly_tiers.distinct_days_in_month, type: number, description:  
+name: group_monthly_site_attendance_weekly_tiers.employee_internal_id, type: string, description:  
+name: group_monthly_site_attendance_weekly_tiers.presence_month, type: date_month, description:  
+name: group_monthly_site_attendance_weekly_tiers.site_id, type: string, description:  
+name: group_monthly_site_attendance_weekly_tiers.site_name, type: string, description:  
+name: group_monthly_site_attendance_weekly_tiers.weekly_attendance_tier_group_monthly, type: string, description:  
+name: group_weekly_site_attendance_weekly_tiers.distinct_days_in_week, type: number, description:  
+name: group_weekly_site_attendance_weekly_tiers.employee_internal_id, type: string, description:  
+name: group_weekly_site_attendance_weekly_tiers.presence_week, type: date_week, description:  
+name: group_weekly_site_attendance_weekly_tiers.site_id, type: string, description:  
+name: group_weekly_site_attendance_weekly_tiers.site_name, type: string, description:  
+name: group_weekly_site_attendance_weekly_tiers.weekly_attendance_tier_group_weekly, type: string, description:  
+name: holidays.holiday_date, type: date_date, description: Date of Holiday 
+name: holidays.holiday_month, type: date_month, description: Date of Holiday 
+name: holidays.holiday_name, type: string, description: Name of Holiday 
+name: holidays.holiday_quarter, type: date_quarter, description: Date of Holiday 
+name: holidays.holiday_raw, type: date_raw, description: Date of Holiday 
+name: holidays.holiday_week, type: date_week, description: Date of Holiday 
+name: holidays.holiday_year, type: date_year, description: Date of Holiday 
+name: month_day_count.day_month, type: date_month, description:  
+name: week_day_count.day_week, type: date_week, description:  
+name: site_attendance_weekly_tiers.employee_internal_id, type: string, description: OSS defined employee ID 
+name: site_attendance_weekly_tiers.site_id, type: string, description:  
+name: site_attendance_weekly_tiers.site_name, type: string, description:  
+name: site_attendance_weekly_tiers.weekly_attendance_tier, type: string, description:  
+
+    Measures are used to perform calculations/aggregations (if top, bottom, total, sum, etc. are used include a measure):
+ name: daily_presence_peak.peak_presence, type: max, description:  
+name: daily_presence_totals.badge_events_count, type: count_distinct, description:  
+name: daily_presence_totals.wifi_events_count, type: count_distinct, description:  
+name: daily_presence_totals.presence_events_count_total, type: count, description: Number of times an employees visited a site 
+name: daily_presence_totals.weekly_attendance_average_group_monthly, type: number, description: The average number of days employees were in the office to be used for monthly grouping 
+name: daily_presence_totals.present_employees_current_month_average, type: number, description:  
+name: daily_presence_totals.weekly_attendance_tier_group_monthly, type: string, description:  
+name: daily_presence_totals.weekly_attendance_average_group_weekly, type: number, description:  
+name: daily_presence_totals.present_employees_current_week_average, type: number, description:  
+name: daily_presence_totals.weekly_attendance_tier_group_weekly, type: string, description:  
+name: daily_presence_totals.weekly_attendance_average, type: number, description:  
+name: daily_presence_totals.present_employees_average, type: number, description: Number of days an employee has been present divided by the number of days in the filter 
+name: daily_presence_totals.weekly_attendance_tier, type: string, description:  
+name: daily_presence_totals.presence_events_count, type: count_distinct, description: The distinct number of times that employees visited a Site 
+name: daily_presence_totals.seating_needs, type: string, description:  
+name: presence_dates.days_count_distinct, type: count_distinct, description:  
+name: desks_table_view.active_desk_count_distinct, type: count_distinct, description:  
+name: desks_table_view.active_desk_count_total, type: count_distinct, description:  
+name: desks_table_view.all_desk_count_distinct, type: count_distinct, description:  
+name: desks_table_view.all_desk_count_total, type: count, description: The number of active desks 
+name: desks_table_view.count, type: count, description:  
+name: desks_table_view.days_count_distinct, type: count_distinct, description:  
+name: desks_table_view.deleted_desk_count, type: count_distinct, description:  
+name: group_monthly_site_attendance_weekly_tiers.1_day_per_week, type: count_distinct, description: How many employees attend work between 0 and 1 days a week 
+name: group_monthly_site_attendance_weekly_tiers.2_day_per_week, type: count_distinct, description: How many employees attend work between 1 and 2 days a week 
+name: group_monthly_site_attendance_weekly_tiers.3_day_per_week, type: count_distinct, description: How many employees attend work between 2 and 3 days a week 
+name: group_monthly_site_attendance_weekly_tiers.4_day_per_week, type: count_distinct, description: How many employees attend work between 3 and 4 days a week 
+name: group_monthly_site_attendance_weekly_tiers.5_day_per_week, type: count_distinct, description: How many employees attend work more than 4 days a week 
+name: group_monthly_site_attendance_weekly_tiers.count_employee_id, type: count_distinct, description:  
+name: group_weekly_site_attendance_weekly_tiers.1_day_per_week, type: count_distinct, description:  
+name: group_weekly_site_attendance_weekly_tiers.2_day_per_week, type: count_distinct, description:  
+name: group_weekly_site_attendance_weekly_tiers.3_day_per_week, type: count_distinct, description:  
+name: group_weekly_site_attendance_weekly_tiers.4_day_per_week, type: count_distinct, description:  
+name: group_weekly_site_attendance_weekly_tiers.5_day_per_week, type: count_distinct, description:  
+name: group_weekly_site_attendance_weekly_tiers.count_employee_id, type: count_distinct, description:  
+name: site_attendance_weekly_tiers.1_day_per_week, type: count_distinct, description:  
+name: site_attendance_weekly_tiers.2_day_per_week, type: count_distinct, description:  
+name: site_attendance_weekly_tiers.3_day_per_week, type: count_distinct, description:  
+name: site_attendance_weekly_tiers.4_day_per_week, type: count_distinct, description:  
+name: site_attendance_weekly_tiers.5_day_per_week, type: count_distinct, description:  
+name: site_attendance_weekly_tiers.count_employee_id, type: count_distinct, description:  
+name: x_daily_presence_totals_explore.active_desks_average, type: number, description:  
+
+    
