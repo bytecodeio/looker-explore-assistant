@@ -6,8 +6,8 @@ from datetime import datetime
 from typing import Dict, List, Any
 from langchain_core.messages import AIMessage
 from langchain_core.language_models import BaseLLM
-# Update import to use the correct package
-from langchain_google_vertexai import VertexAI
+# Remove the unused import
+# from langchain_google_vertexai import VertexAI
 
 from utils.document_loader import DocumentLoader
 from utils.query_analyzer import QueryAnalyzer

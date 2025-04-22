@@ -36,6 +36,7 @@ class LookerExploreWorkflow(Chain, BaseModel):
     
     class Config:
         arbitrary_types_allowed = True
+        protected_namespaces = ()  # Disable protected namespaces to avoid warning
         
     @property
     def input_keys(self) -> list:
@@ -109,7 +110,10 @@ class LookerExploreWorkflow(Chain, BaseModel):
         return {
             "response": response,
             "explore_url": state.get("explore_url", ""),
-            "visualization_data": state.get("visualization_data", None)
+            "visualization_data": state.get("visualization_data", None),
+            "looker_url": state.get("explore_url", ""),
+            "summary": response,
+            "looker_url_parts": state.get("looker_url_parts", {})
         }
         
     def _process_verification(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -143,7 +147,10 @@ class LookerExploreWorkflow(Chain, BaseModel):
         return {
             "response": response,
             "explore_url": state.get("explore_url", ""),
-            "visualization_data": state.get("visualization_data", None)
+            "visualization_data": state.get("visualization_data", None),
+            "looker_url": state.get("explore_url", ""),
+            "summary": response,
+            "looker_url_parts": state.get("looker_url_parts", {})
         }
 
     def _call(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -244,12 +251,15 @@ class LookerExploreWorkflow(Chain, BaseModel):
             # Compile final response
             content_messages = [msg.content for msg in state.get("messages", []) if hasattr(msg, "content")]
             text_response = "\n\n".join(content_messages[:-1] if len(content_messages) > 1 else content_messages)
-            
+                
             # Return response with all required fields
             return {
                 "response": text_response,
                 "explore_url": state.get("explore_url", ""),
-                "visualization_data": state.get("visualization_data", None)
+                "visualization_data": state.get("visualization_data", None),
+                "looker_url": state.get("explore_url", ""),
+                "summary": text_response,
+                "looker_url_parts": state.get("looker_url_parts", {})
             }
             
         except Exception as e:
@@ -257,5 +267,8 @@ class LookerExploreWorkflow(Chain, BaseModel):
             return {
                 "response": f"An error occurred while processing your request: {str(e)}",
                 "explore_url": "",
-                "visualization_data": None
+                "visualization_data": None,
+                "looker_url": "",
+                "summary": f"An error occurred while processing your request: {str(e)}",
+                "looker_url_parts": {}
             }

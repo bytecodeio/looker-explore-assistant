@@ -110,12 +110,18 @@ For running the full test suite:
    # Default location: documents/question_set.csv
    ```
 
-2. Run the test suite:
+2. Set up your Looker environment variables:
+   ```bash
+   export LOOKERSDK_BASE_URL="https://your-looker-instance.com"
+   export LOOKERSDK_CLIENT_ID="your_client_id"
+   export LOOKERSDK_CLIENT_SECRET="your_client_secret"
+   ```
+
+3. Run the test suite:
    ```bash
    python explore-assistant-cloud-function/testing/test_runner.py \
      --questions path/to/question_set.csv \
-     --output ./test_results \
-     --looker-url https://your-looker-instance.com
+     --output ./test_results
    ```
 
    Optional arguments:
@@ -123,6 +129,7 @@ For running the full test suite:
    - `--skip-visualizations`: Skip visualization tests
    - `--question-id ID`: Test a specific question
    - `--question-text "text"`: Test with custom question
+   - `--looker-url URL`: Override the Looker URL (if not using environment variable)
 
    ex:
    ```bash
@@ -131,7 +138,7 @@ For running the full test suite:
    python testing/test_runner.py \
      --questions documents/question_set.csv \
      --output ./test_results \
-     --looker-url https://looker.bytecode.io \     --limit 2
+     --limit 2
    ```
 
 3. View results:

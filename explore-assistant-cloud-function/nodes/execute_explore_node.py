@@ -163,10 +163,12 @@ def build_explore_url(explore_params: Dict[str, Any], looker_instance_url: str =
     for key, values in filters.items():
         if isinstance(values, list):
             for value in values:
-                encoded_value = urllib.parse.quote(value)
+                # Properly encode filter values for URLs
+                encoded_value = urllib.parse.quote_plus(str(value))
                 url_params.append(f"f[{key}]={encoded_value}")
         else:
-            encoded_value = urllib.parse.quote(str(values))
+            # Properly encode filter values for URLs
+            encoded_value = urllib.parse.quote_plus(str(values))
             url_params.append(f"f[{key}]={encoded_value}")
     
     # Combine URL with parameters
@@ -210,7 +212,9 @@ def generate_explore_url(looker_instance_url: str, explore_params: Dict[str, Any
             value = values[0]  # Take the first value if multiple are provided
         else:
             value = values
-        url_params.append(f"f[{field}]={value}")
+        # Properly encode filter values for URLs
+        encoded_value = urllib.parse.quote_plus(str(value))
+        url_params.append(f"f[{field}]={encoded_value}")
     
     # Add pivots
     pivots = explore_params.get("pivots", [])
@@ -299,6 +303,45 @@ def capture_visualization(sdk, query_id: str) -> bytes:
     except Exception as e:
         logger.error(f"Error capturing visualization: {e}")
         return None
+
+def validate_output_format(state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Validates and ensures the output format meets the expected structure
+    
+    Args:
+        state: Current workflow state
+        
+    Returns:
+        Validated state with standardized output format
+    """
+    # Ensure all required fields exist
+    required_fields = {
+        "explore_url": "",
+        "looker_url_parts": {},
+        "query_results": [],
+        "visualization_data": None,
+    }
+    
+    for field, default_value in required_fields.items():
+        if field not in state:
+            state[field] = default_value
+            logger.warning(f"Missing required field '{field}' in state - adding default value")
+    
+    # Ensure messages field is properly formatted
+    if "messages" not in state:
+        state["messages"] = []
+        logger.warning("Missing 'messages' field in state - adding empty list")
+    
+    # Generate a summary if it doesn't exist
+    if not state.get("summary"):
+        # Extract content from messages
+        content_messages = [msg.content for msg in state.get("messages", []) if hasattr(msg, "content")]
+        if content_messages:
+            state["summary"] = "\n\n".join(content_messages)
+        else:
+            state["summary"] = "No summary available."
+    
+    return state
 
 def execute_explore_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -432,21 +475,29 @@ def execute_explore_node(state: Dict[str, Any]) -> Dict[str, Any]:
         updated_state = {
             **state,
             "explore_url": explore_url,
+            "looker_url_parts": explore_params,  # Add explore_params as looker_url_parts
             "query_results": parsed_results,
             "visualization_data": visualization_data,
+            "summary": summary,  # Add summary explicitly for testing
             "messages": state.get("messages", []) + [
                 AIMessage(content=f"{summary}\n\nYou can view and explore this data further here: {explore_url}")
             ]
         }
         
-        return updated_state
+        # Validate the output format before returning
+        return validate_output_format(updated_state)
         
     except Exception as e:
         logger.error(f"Error executing explore: {e}")
-        return {
+        error_state = {
             **state,
             "error": str(e),
+            "looker_url_parts": explore_params,  # Also include in error case
+            "summary": f"I encountered an error while running your query: {str(e)}",
             "messages": state.get("messages", []) + [
                 AIMessage(content=f"I encountered an error while running your query: {str(e)}")
             ]
         }
+        
+        # Also validate error state format
+        return validate_output_format(error_state)

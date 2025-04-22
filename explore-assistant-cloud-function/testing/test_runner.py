@@ -53,6 +53,42 @@ def load_questions_from_csv(csv_path: str) -> List[Dict[str, str]]:
         logger.error(f"Error loading questions: {e}")
         return []
 
+def verify_output_format(result: Dict[str, Any]) -> bool:
+    """
+    Verify that the workflow output has the expected format
+    
+    Args:
+        result: The result from the workflow execution
+        
+    Returns:
+        True if the output format is valid, False otherwise
+    """
+    # Required fields for a valid result
+    required_fields = ["response", "explore_url", "visualization_data", "looker_url_parts"]
+    
+    # Check if all required fields exist
+    missing_fields = [field for field in required_fields if field not in result]
+    
+    if missing_fields:
+        logger.error(f"Output format validation failed. Missing fields: {missing_fields}")
+        return False
+    
+    # Additional validation for specific fields
+    if not isinstance(result["response"], str):
+        logger.error("Output format validation failed: 'response' must be a string")
+        return False
+        
+    if not isinstance(result["explore_url"], str):
+        logger.error("Output format validation failed: 'explore_url' must be a string")
+        return False
+        
+    if "looker_url_parts" in result and not isinstance(result["looker_url_parts"], dict):
+        logger.error("Output format validation failed: 'looker_url_parts' must be a dictionary")
+        return False
+    
+    logger.info("Output format validation passed")
+    return True
+
 def run_single_test(workflow: LookerExploreWorkflow, question: Dict[str, str], 
                    evaluator: LLMEvaluator, 
                    image_handler: ImageHandler = None) -> Dict[str, Any]:
@@ -83,6 +119,9 @@ def run_single_test(workflow: LookerExploreWorkflow, question: Dict[str, str],
         response = workflow.invoke({"query": clean_question, "request_visualization": True})
         end_time = datetime.now()
         
+        # Verify output format
+        format_valid = verify_output_format(response)
+        
         # Extract visualization data if available
         visualization_data = response.get("visualization_data")
         
@@ -95,7 +134,8 @@ def run_single_test(workflow: LookerExploreWorkflow, question: Dict[str, str],
             "explore_url": response.get("explore_url", ""),
             "has_visualization": visualization_data is not None,
             "execution_time": (end_time - start_time).total_seconds(),
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "format_valid": format_valid
         }
         
         # Save visualization image if available
@@ -132,10 +172,20 @@ def run_single_test(workflow: LookerExploreWorkflow, question: Dict[str, str],
             "timestamp": datetime.now().isoformat()
         }
 
-def init_looker_sdk(looker_url: str) -> looker_sdk.sdk.api40.methods.Looker40SDK:
+def init_looker_sdk(looker_url: str = None) -> tuple:
     """Initialize Looker SDK using ini file and environment variables"""
-    # Set environment variables for Looker SDK
-    os.environ["LOOKERSDK_BASE_URL"] = looker_url
+    # Prioritize LOOKERSDK_BASE_URL environment variable if it exists
+    base_url = os.environ.get("LOOKERSDK_BASE_URL")
+    
+    # Fall back to provided parameter if environment variable is not set
+    if not base_url and looker_url:
+        base_url = looker_url
+        os.environ["LOOKERSDK_BASE_URL"] = looker_url
+    
+    if not base_url:
+        logger.error("No Looker URL provided. Set LOOKERSDK_BASE_URL environment variable or provide --looker-url parameter")
+        raise ValueError("Missing Looker URL")
+        
     os.environ["LOOKERSDK_VERIFY_SSL"] = "false"
     
     # Get credentials from environment
@@ -156,8 +206,8 @@ def init_looker_sdk(looker_url: str) -> looker_sdk.sdk.api40.methods.Looker40SDK
         sdk = looker_sdk.init40()
         # Test connection
         sdk.me()
-        logger.info("Successfully connected to Looker API")
-        return sdk
+        logger.info(f"Successfully connected to Looker API at {base_url}")
+        return sdk, base_url  # Return both SDK and base_url
     except error.SDKError as e:
         logger.error(f"Failed to initialize Looker SDK: {e}")
         raise
@@ -181,20 +231,22 @@ def run_batch_test(questions: List[Dict[str, str]],
         os.environ["REGION"] = "us-central1"  # Set a default or get from config
         
     # Initialize Vertex AI
-    
-
     try:
-        vertexai.init(
-            project=os.environ.get("PROJECT"),
-            location=os.environ.get("REGION")
-        )
-        logger.info(f"Initialized Vertex AI with project {os.environ.get('PROJECT')}")
+        # Check if necessary environment variables are set
+        project = os.environ.get("PROJECT")
+        region = os.environ.get("REGION")
+        
+        if not project or not region:
+            logger.warning(f"Missing required Vertex AI environment variables: PROJECT={project}, REGION={region}")
+        else:
+            # Don't call vertexai.init directly - the constructor will handle initialization
+            logger.info(f"Using Vertex AI with project {project} in {region}")
     except Exception as e:
-        logger.warning(f"Could not initialize Vertex AI: {e}")
+        logger.warning(f"Could not initialize Vertex AI: {str(e)}")
     
     # Initialize Looker SDK
     try:
-        sdk = init_looker_sdk(config.get("looker_instance_url"))
+        sdk, looker_url = init_looker_sdk(config.get("looker_instance_url"))
     except Exception as e:
         logger.error(f"Failed to initialize Looker SDK: {e}")
         raise
@@ -203,7 +255,7 @@ def run_batch_test(questions: List[Dict[str, str]],
     model_manager = ModelManager()
     workflow = LookerExploreWorkflow(
         model_manager=model_manager,
-        looker_instance_url=config.get("looker_instance_url", ""),
+        looker_instance_url=looker_url,  # Use the URL returned from init_looker_sdk
         looker_sdk=sdk  # Pass initialized SDK to workflow
     )
     evaluator = LLMEvaluator(model_manager)
@@ -263,8 +315,8 @@ if __name__ == "__main__":
                         help="Directory to save test results")
     parser.add_argument("--limit", type=int, default=None,
                         help="Limit the number of questions to process")
-    parser.add_argument("--looker-url", default="https://looker-dev.company.com",
-                        help="URL of the Looker instance")
+    parser.add_argument("--looker-url", default=None,
+                        help="URL of the Looker instance (can also use LOOKERSDK_BASE_URL env var)")
     parser.add_argument("--skip-visualizations", action="store_true",
                         help="Skip requesting and evaluating visualizations")
     parser.add_argument("--question-id", type=str, default=None,

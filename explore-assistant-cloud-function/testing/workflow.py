@@ -37,7 +37,21 @@ class LookerExploreWorkflow(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
+        protected_namespaces = ()  # Disable protected namespaces to avoid warning
 
+    # Add invoke method for compatibility with testing framework
+    def invoke(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Process inputs and return outputs, delegating to _call
+        
+        Args:
+            inputs: Input dictionary containing query and other parameters
+            
+        Returns:
+            Dictionary of results including response, explore_url, etc.
+        """
+        return self._call(inputs)
+        
     @property
     def input_keys(self) -> list:
         return ["query", "request_visualization"]

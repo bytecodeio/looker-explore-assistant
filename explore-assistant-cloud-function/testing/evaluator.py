@@ -3,6 +3,7 @@ import logging
 import re
 import base64
 from typing import Dict, Any, Optional
+import urllib.parse  # Add this import for URL decoding
 
 from utils.model_manager import ModelManager
 
@@ -95,7 +96,8 @@ class LLMEvaluator:
                 for param in query_string.split('&'):
                     if '=' in param:
                         key, value = param.split('=', 1)
-                        query_params[key] = value
+                        # Decode URL-encoded values
+                        query_params[key] = urllib.parse.unquote(value)
             
             # Extract specific parameters
             fields = query_params.get('fields', '').split(',')
@@ -103,6 +105,7 @@ class LLMEvaluator:
             for key, value in query_params.items():
                 if key.startswith('f['):
                     filter_name = key[2:-1]  # Remove the 'f[' and ']'
+                    # Value is already URL-decoded above
                     filters[filter_name] = value
                     
             vis_config = {}

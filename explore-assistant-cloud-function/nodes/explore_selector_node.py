@@ -37,7 +37,7 @@ def rank_explores_by_relevance(user_query: str, explores: List[Dict], llm=None) 
     
     # If no LLM is provided, create a default fast model
     if llm is None:
-        from langchain.llms import VertexAI
+        from langchain_community.llms import VertexAI
         llm = VertexAI(
             model_name="gemini-pro",
             max_output_tokens=1024,

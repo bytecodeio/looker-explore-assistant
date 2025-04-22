@@ -1,7 +1,7 @@
 import re
 import logging
 from typing import Dict, List, Tuple
-from langchain.llms import VertexAI
+from langchain_community.llms import VertexAI
 
 class QueryAnalyzer:
     """Utility class for analyzing user queries"""
