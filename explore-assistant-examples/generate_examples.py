@@ -433,8 +433,8 @@ if __name__ == "__main__":
         create_example_files(args.model, args.explore, args.project_id, args.location, args.chain_load)
 
 # EXAMPLE CALLS
-# # Dashboard mode
-# python generate_examples.py --dashboard_id 123 --project_id my-project --location us-central1 --chain_load
+# # Dashboard mode - will gather stats for a dashboard and generate examples for each tile and filter set used
+# python generate_examples.py --dashboard_id 123 --project_id my-project --location us-central1 
 
 # # Original explore mode
 # python generate_examples.py --model my_model --explore my_explore --project_id my-project --location us-central1 --chain_load

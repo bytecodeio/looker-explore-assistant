@@ -125,12 +125,22 @@ The load_examples Python script is designed to manage data uploads from a JSON f
 ### Generation Script Parameters
 The generate_examples.py script accepts several command line arguments to specify the details required for generating example files:
 
-- `--model`: Required. Looker model name.
-- `--explore`: Required. Looker explore name.
+#### Explore Mode:
+- `--model`: Required when not using dashboard mode. Looker model name.
+- `--explore`: Required when model is specified. Looker explore name.
 - `--project_id`: Required. Google Cloud project ID.
 - `--location`: Required. Google Cloud location.
+- `--chain_load`: Optional. Load examples into BigQuery after generating them.
 
-# Running the Generation Script
+#### Dashboard Mode:
+- `--dashboard_id`: Required when not using explore mode. Looker dashboard ID.
+- `--project_id`: Required. Google Cloud project ID.
+- `--location`: Required. Google Cloud location.
+- `--chain_load`: Optional. Load examples into BigQuery after generating them.
+
+## Running the Generation Script
+
+### Explore Mode
 The generate_examples.py script fetches information about an explores' fields and top queries. It calls Gemini to generate sample questions that could be answered by the top queries. These can be tuned or used directly as examples to upload to the Explore Assistant.
 
 ```bash
@@ -141,3 +151,26 @@ If desired, you can directly upload the files after generation by using the --ch
 ```bash
 python generate_examples.py --model YOUR_MODEL_NAME --explore YOUR_EXPLORE_NAME --project_id YOUR_GCP_PROJECT_ID --location YOUR_GCP_LOCATION --chain_load
 ```
+
+### Dashboard Mode
+The Dashboard mode allows you to generate examples based on queries used in a specific Looker dashboard. This is useful when you want to create examples that reflect how users are actually interacting with your data through dashboards.
+
+```bash
+python generate_examples.py --dashboard_id YOUR_DASHBOARD_ID --project_id YOUR_GCP_PROJECT_ID --location YOUR_GCP_LOCATION
+```
+
+With the `--chain_load` option, you can also automatically load these examples into BigQuery:
+
+```bash
+python generate_examples.py --dashboard_id YOUR_DASHBOARD_ID --project_id YOUR_GCP_PROJECT_ID --location YOUR_GCP_LOCATION --chain_load
+```
+
+When using Dashboard mode, the script:
+1. Fetches all queries associated with the dashboard
+2. Identifies unique model:explore pairs used in the dashboard
+3. For each model:explore pair:
+   - Creates a directory `./generated_examples/dashboard_YOUR_DASHBOARD_ID/`
+   - Generates metadata and example files for each model:explore pair
+   - Optionally loads these examples into BigQuery if `--chain_load` is specified
+
+This approach allows you to quickly generate relevant examples based on how your dashboard users are querying data.
