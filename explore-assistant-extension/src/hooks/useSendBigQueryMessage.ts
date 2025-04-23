@@ -6,7 +6,7 @@ import { useErrorBoundary } from 'react-error-boundary'
 import { AssistantState } from '../slices/assistantSlice'
 
 import looker_filter_doc from '../documents/looker_filter_doc.md'
-import looker_visualization_doc from '../documents/looker_visualization_doc.md'
+// import looker_visualization_doc from '../documents/looker_visualization_doc.md'
 import looker_filters_interval_tf from '../documents/looker_filters_interval_tf'
 import looker_pivots_url_parameters_doc from '../documents/looker_pivots_url_parameters_doc.md'
 
@@ -182,8 +182,6 @@ ${exploreRefinementExamples &&
         ${looker_filter_doc}
       Here is general documentation on how intervals and timeframes are applied in Looker
        ${looker_filters_interval_tf}   
-      Here is general documentation on visualizations:
-       ${looker_visualization_doc}
       Here is general documentation on Looker JSON fields and pivots
        ${looker_pivots_url_parameters_doc}
              
