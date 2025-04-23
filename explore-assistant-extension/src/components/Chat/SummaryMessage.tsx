@@ -1,7 +1,7 @@
 import { Chip, Section, Spinner } from '@looker/components'
 import React, { useEffect } from 'react'
 import Message from './Message'
-import useSendVertexMessage from '../../hooks/useSendVertexMessage'
+import useSendBigQueryMessage from '../../hooks/useSendBigQueryMessage'
 import MarkdownText from './MarkdownText'
 import { ExploreParams, SummarizeMesage, updateLastHistoryEntry, updateSummaryMessage } from '../../slices/assistantSlice'
 import { useDispatch } from 'react-redux'
@@ -16,7 +16,7 @@ const SummaryMessage = ({ message, onSummaryComplete }: SummaryMessageProps) => 
   const [loading, setLoading] = React.useState<boolean>(true)
   const [summary, setSummary] = React.useState<string>('')
 
-  const { summarizeExplore } = useSendVertexMessage()
+  const { summarizeExplore } = useSendBigQueryMessage()
 
   useEffect(() => {
     let isMounted = true

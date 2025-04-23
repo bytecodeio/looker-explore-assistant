@@ -8,7 +8,7 @@ import SamplePrompts from '../../components/SamplePrompts'
 import { ExploreEmbed } from '../../components/ExploreEmbed'
 import { RootState } from '../../store'
 import { useDispatch, useSelector } from 'react-redux'
-import useSendVertexMessage from '../../hooks/useSendVertexMessage'
+import useSendBigQueryMessage from '../../hooks/useSendBigQueryMessage'
 import {
   addMessage,
   AssistantState,
@@ -53,7 +53,7 @@ const AgentPage = () => {
   const dispatch = useDispatch()
   const [expanded, setExpanded] = useState(false)
   const { generateExploreParams, isSummarizationPrompt, summarizePrompts } =
-    useSendVertexMessage()
+    useSendBigQueryMessage()
 
   const {
     isChatMode,

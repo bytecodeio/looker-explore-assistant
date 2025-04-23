@@ -75,13 +75,7 @@ export class UtilsHelper {
       .map((key) => enumerator[key])
   }
 
-  public static getQueryFromPrompt(singleLineString: string, useNativeBQ: boolean) {
-    let subselect = ''
-    if (useNativeBQ == false) {
-      subselect = `SELECT llm.bq_vertex_remote('` + singleLineString + `') AS r, '' AS status `
-    } else {
-      subselect = `SELECT '` + singleLineString + `' AS prompt`
-    }
-    return subselect
+  public static getQueryFromPrompt(singleLineString: string) {
+    return `SELECT '` + singleLineString + `' AS prompt`
   }
 }

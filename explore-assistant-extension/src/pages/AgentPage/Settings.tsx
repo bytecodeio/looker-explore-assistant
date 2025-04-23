@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react'
-import { Modal, Box, Typography, Switch, IconButton, Select, MenuItem } from '@mui/material'
+import { Modal, Box, Typography, Switch, IconButton } from '@mui/material'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from '../../store'
 import {
@@ -9,7 +9,6 @@ import {
 } from '../../slices/assistantSlice'
 import { ExtensionContext } from '@looker/extension-sdk-react'
 import { useBigQueryExamples } from '../../hooks/useBigQueryExamples'
-import useSendVertexMessage from '../../hooks/useSendVertexMessage'
 import styles from '../../styles.module.css'
 import InfoIcon from '@mui/icons-material/Info'
 
@@ -30,13 +29,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
   const [userAttributes, setUserAttributes] = useState<{ id: string | undefined, name: string }[]>([])
   const [expandedSetting, setExpandedSetting] = useState<string | null>(null)
 
-  const VERTEX_CF_AUTH_TOKEN = 'vertex_cf_auth_token'
-
   const [bigQueryTestResult, setBigQueryTestResult] = useState<boolean | null>(null)
-  const [vertexTestResult, setVertexTestResult] = useState<boolean | null>(null)
   const [hasAutoClosedOnce, setHasAutoClosedOnce] = useState(false)
   const { testBigQuerySettings } = useBigQueryExamples()
-  const { testVertexSettings } = useSendVertexMessage()
 
   const [isAdmin, setIsAdmin] = useState(false)
 
@@ -57,18 +52,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     const runTests = async () => {
       const bigQueryResult = await testBigQuerySettings()
       setBigQueryTestResult(bigQueryResult)
-      const vertexResult = await testVertexSettings()
-      setVertexTestResult(vertexResult)
     }
     runTests()
   }, [settings])
 
   useEffect(() => {
-    if (hasTestedSettings && bigQueryTestResult && vertexTestResult && !hasAutoClosedOnce) {
+    if (hasTestedSettings && bigQueryTestResult && !hasAutoClosedOnce) {
       onClose()
       setHasAutoClosedOnce(true)
     }
-  }, [hasTestedSettings, bigQueryTestResult, vertexTestResult, onClose])
+  }, [hasTestedSettings, bigQueryTestResult, onClose])
 
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -107,7 +100,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
             label: prefixedId,
             type: 'string',
             default_value: value,
-            value_is_hidden: id === VERTEX_CF_AUTH_TOKEN,
+            value_is_hidden: false,
             user_can_view: false,
             user_can_edit: false,
           })
@@ -119,11 +112,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
             label: prefixedId,
             type: 'string',
             default_value: value,
-            value_is_hidden: id === VERTEX_CF_AUTH_TOKEN,
+            value_is_hidden: false,
             user_can_view: false,
             user_can_edit: false,
-            // May be unnecessary since we're using an extension framework, the domain is the server itself.
-            hidden_value_domain_whitelist: "https://explore-assistant-api-730192175971.us-central1.run.app"
           })
         )
         setUserAttributes([...userAttributes, { id: newUserAttribute.id, name: prefixedId }])
@@ -135,7 +126,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
 
   const handleTestAndSave = async () => {
     testBigQuerySettings()
-    testVertexSettings()
   }
 
   const handleReset = () => {
@@ -149,24 +139,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     setExpandedSetting(expandedSetting === id ? null : id)
   }
 
-  const handleDropdownChange = (id: string, value: string) => {
-    dispatch(
-      setSetting({
-        id,
-        value: value === 'Cloud Function',
-      }),
-    )
-  }
-
   if (!settings) return null
 
   const filteredSettings = Object.entries(settings).filter(([id]) => {
-    if (id === 'useCloudFunction' || id === 'show_explore_data') return true
-    if (settings.useCloudFunction.value) {
-      return id === 'vertex_ai_endpoint' || id === 'vertex_cf_auth_token'
-    } else {
-      return false
-    }
+    return id === 'show_explore_data' || 
+           id === 'bigquery_example_looker_model_name'
   })
 
   return (
@@ -184,24 +161,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
           {filteredSettings.map(([id, setting]) => (
             <li key={id} className={styles.settingItem}>
               <div>
-
                 <IconButton
                   onClick={() => handleExpandClick(id)}
                   aria-expanded={expandedSetting === id}
                   aria-label="show more"
                 >
-                  {setting.name == 'Use Cloud Function' ? 'Backend' : setting.name} <div className='infoIcon'><InfoIcon /></div>
+                  {setting.name} <div className='infoIcon'><InfoIcon /></div>
                 </IconButton>
-                {id === 'useCloudFunction' ? (
-                  <Select
-                    value={setting.value ? 'Cloud Function' : 'Bigquery'}
-                    onChange={(e) => handleDropdownChange(id, e.target.value)}
-                    className={styles.inputField}
-                  >
-                    <MenuItem value="Cloud Function">Cloud Function</MenuItem>
-                    <MenuItem value="Bigquery">Bigquery</MenuItem>
-                  </Select>
-                ) : typeof setting.value === 'boolean' ? (
+                {typeof setting.value === 'boolean' ? (
                   <Switch
                     edge="end"
                     onChange={() => handleToggle(id)}
@@ -210,7 +177,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                   />
                 ) : (
                   <input
-                    type={id === VERTEX_CF_AUTH_TOKEN ? 'password' : 'text'}
+                    type="text"
                     value={String(setting.value)}
                     onChange={(e) => handleSaveSetting(id, e.target.value)}
                     className={styles.inputField}
@@ -229,12 +196,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
           <Typography variant="body2">
             BigQuery Settings Test: {bigQueryTestResult === null ? 'Testing...' : bigQueryTestResult ? <span className={styles.passed}>Passed</span> : <span className={styles.failed}>Failed</span>}
           </Typography>
-          <Typography variant="body2">
-            Vertex Settings Test: {vertexTestResult === null ? 'Testing...' : vertexTestResult ? <span className={styles.passed}>Passed</span> : <span className={styles.failed}>Failed</span>}
-          </Typography>
         </div>
         <button onClick={handleTestAndSave} className={styles.button}>Test and Save</button>
-        
       </Box>
     </Modal>
   )

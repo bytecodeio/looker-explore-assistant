@@ -5,18 +5,16 @@ import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from './store'
 import { useLookerFields } from './hooks/useLookerFields'
 import { useBigQueryExamples } from './hooks/useBigQueryExamples'
-import useSendVertexMessage from './hooks/useSendVertexMessage'
 import AgentPage from './pages/AgentPage'
 import SettingsModal from './pages/AgentPage/Settings'
 
 const ExploreApp = () => {
   const dispatch = useDispatch()
-  const { settings, bigQueryTestSuccessful, vertexTestSuccessful } = useSelector((state: RootState) => state.assistant) as any
+  const { settings, bigQueryTestSuccessful } = useSelector((state: RootState) => state.assistant) as any
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
   useLookerFields()
   const { testBigQuerySettings } = useBigQueryExamples()
-  const { testVertexSettings } = useSendVertexMessage()
 
   useEffect(() => {
     const missingSettings = Object.values(settings).some(setting => !setting?.value)
@@ -28,12 +26,11 @@ const ExploreApp = () => {
   useEffect(() => {
     const runTests = async () => {
       testBigQuerySettings()
-      testVertexSettings()
     }
-    if (!bigQueryTestSuccessful || !vertexTestSuccessful) {
+    if (!bigQueryTestSuccessful) {
       runTests()
     }
-  }, [testBigQuerySettings, testVertexSettings, bigQueryTestSuccessful, vertexTestSuccessful, dispatch, settings.useCloudFunction.value, settings])
+  }, [testBigQuerySettings, bigQueryTestSuccessful, dispatch, settings])
 
   return (
     <>
@@ -41,7 +38,7 @@ const ExploreApp = () => {
         open={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
       />
-      {!isSettingsOpen && bigQueryTestSuccessful && vertexTestSuccessful && (
+      {!isSettingsOpen && bigQueryTestSuccessful && (
         <Switch>
           <Route path="/index" exact>
             <AgentPage />
