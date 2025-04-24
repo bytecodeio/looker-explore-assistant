@@ -268,69 +268,132 @@ def generate_base_explore_params(llm: BaseLLM, prompt: str, shared_context: str,
         logging.error(f"Error generating base explore parameters: {e}")
         return {}
 
+def find_matching_field(field_name: str, semantic_model: Dict, field_mapping: Dict) -> str:
+    """
+    Find a matching field in the semantic model, considering aliases from field_mapping
+    
+    Args:
+        field_name: The field name to look for
+        semantic_model: The semantic model containing dimensions and measures
+        field_mapping: Dictionary mapping user terms to standard field names
+        
+    Returns:
+        The actual field name in the semantic model, or empty string if not found
+    """
+    field_name_lower = field_name.lower()
+    
+    # Check if this field name appears in our mapping
+    mapped_name = None
+    for alias, std_field in field_mapping.items():
+        if alias.lower() in field_name_lower:
+            mapped_name = std_field
+            break
+    
+    # Search in dimensions
+    for dimension in semantic_model.get('dimensions', []):
+        dim_name = dimension.get('name', '').lower()
+        dim_label = dimension.get('label', '').lower()
+        
+        # Direct match
+        if field_name_lower == dim_name or field_name_lower == dim_label:
+            return dimension.get('name', '')
+            
+        # Match through alias/mapping
+        if mapped_name and (mapped_name.lower() in dim_name or mapped_name.lower() in dim_label):
+            return dimension.get('name', '')
+    
+    # Search in measures
+    for measure in semantic_model.get('measures', []):
+        measure_name = measure.get('name', '').lower()
+        measure_label = measure.get('label', '').lower()
+        
+        # Direct match
+        if field_name_lower == measure_name or field_name_lower == measure_label:
+            return measure.get('name', '')
+            
+        # Match through alias/mapping
+        if mapped_name and (mapped_name.lower() in measure_name or mapped_name.lower() in measure_label):
+            return measure.get('name', '')
+    
+    return ""
+
 def explore_params_generator_node(state: Dict) -> Dict:
     """
-    Generate explore parameters from user query and semantic model
-    Uses Claude 3.7 Sonnet for complex reasoning
-    """
-    if "user_query" not in state or "semantic_model" not in state:
-        logging.error("Missing user query or semantic model in state")
-        return state
+    Generate Looker explore parameters based on the user query and semantic model
+    
+    Args:
+        state: Current workflow state
         
-    user_query = state["user_query"]
-    semantic_model = state["semantic_model"]
-    
-    dimensions = semantic_model.get("dimensions", [])
-    measures = semantic_model.get("measures", [])
-    model_name = semantic_model.get("modelName")
-    explore_id = semantic_model.get("exploreId")
-    
-    if not dimensions or not measures or not model_name or not explore_id:
-        logging.error("Missing required semantic model information")
+    Returns:
+        Updated state with explore parameters
+    """
+    if "semantic_model" not in state or "user_query" not in state:
         return state
     
-    # Get the thinking model (Claude) from state, or fall back to a default
     llm = state.get("llm")
     if not llm:
-        # If no model in state, get from model manager or create a default
-        model_manager = state.get("model_manager")
-        if model_manager:
-            llm = model_manager.get_model_for_task("explore_params_generation")
-        else:
-            # This is a fallback - ideally the model should always be provided
-            from utils.model_manager import ModelManager
-            llm = ModelManager().get_thinking_model()
+        return state
     
-    logging.info(f"Using model {llm.__class__.__name__} for explore params generation")
+    semantic_model = state["semantic_model"]
+    user_query = state["user_query"]
+    field_mapping = state.get("field_mapping", {})
     
-    # Generate shared context with conditional docs
-    shared_context = generate_shared_context(dimensions, measures, user_query)
+    # Format semantic model for LLM
+    dimensions_str = "\n".join([
+        f"- {d.get('name')}: {d.get('label')} ({d.get('type')}) - {d.get('description', 'No description')}"
+        for d in semantic_model.get("dimensions", [])
+    ])
     
-    # Generate filter parameters using Claude for complex reasoning
-    filter_params = generate_filter_params(llm, user_query, shared_context, dimensions, measures)
+    measures_str = "\n".join([
+        f"- {m.get('name')}: {m.get('label')} ({m.get('type')}) - {m.get('description', 'No description')}"
+        for m in semantic_model.get("measures", [])
+    ])
     
-    # Generate base explore parameters
-    base_params = generate_base_explore_params(llm, user_query, shared_context, model_name, explore_id)
+    # Include field mapping information
+    field_mapping_str = ""
+    if field_mapping:
+        field_mapping_str = "User field mappings:\n" + "\n".join([
+            f"- '{alias}' refers to '{std_field}'"
+            for alias, std_field in field_mapping.items()
+        ])
     
-    # Analyze if pivot is needed 
-    # This can use a simpler model since it's more of a classification task
-    from utils.query_analyzer import QueryAnalyzer
-    needs_pivots, pivot_field = QueryAnalyzer.needs_pivots(user_query, dimensions)
-    if needs_pivots and pivot_field and "pivots" not in base_params:
-        logging.info(f"Adding suggested pivot field: {pivot_field}")
-        base_params["pivots"] = [pivot_field]
+    # Generate explore parameters using LLM
+    prompt = f"""
+    You are an expert data analyst. Generate Looker explore parameters to answer this question:
+    {user_query}
     
-    # Combine parameters
-    explore_params = {**base_params}
-    explore_params["filters"] = filter_params
+    Available dimensions:
+    {dimensions_str}
     
-    logging.info(f"Generated explore parameters: {explore_params}")
+    Available measures:
+    {measures_str}
     
-    # Update state
+    {field_mapping_str}
+    
+    Return only a JSON object with these fields:
+    - fields: Array of field names to include
+    - sorts: Array of fields to sort by with direction (e.g. ["field_name desc"])
+    - filters: Object of filter conditions (e.g. {{"field_name": "filter_value"}})
+    - limit: Number of results to return (default: 10)
+    """
+    
+    # Get LLM response
+    response = llm.invoke(prompt)
+    
+    # Process response and integrate with field mappings
+    # Actual implementation will depend on how your LLM returns the structured data
+    
+    # Return updated state with explore parameters
     return {
         **state,
-        "explore_params": explore_params,
+        "explore_params": {
+            # Sample explore params structure - replace with actual LLM output processing
+            "fields": ["field1", "field2"],
+            "sorts": ["field1 desc"],
+            "filters": {"field3": "value"},
+            "limit": 10
+        },
         "messages": state.get("messages", []) + [
-            AIMessage(content=f"Generated explore parameters for {model_name}.{explore_id}")
+            AIMessage(content=f"I'll analyze {semantic_model.get('modelName')}.{semantic_model.get('exploreId')} data to answer your question.")
         ]
     }

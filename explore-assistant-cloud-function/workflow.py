@@ -40,7 +40,7 @@ class LookerExploreWorkflow(Chain, BaseModel):
         
     @property
     def input_keys(self) -> list:
-        return ["query", "request_visualization"]
+        return ["query", "request_visualization", "standard_fields"]
         
     @property
     def output_keys(self) -> list:
@@ -172,8 +172,15 @@ class LookerExploreWorkflow(Chain, BaseModel):
                         "visualization_data": None
                     }
             
+            # Extract standard fields if provided
+            standard_fields = inputs.get("standard_fields", {})
+            
             # Check if this is feedback on a previous explore
             if self.conversation_state:
+                # Add standard_fields to the conversation state if they're provided
+                if standard_fields and "standard_fields" not in self.conversation_state:
+                    self.conversation_state["standard_fields"] = standard_fields
+                
                 if self.conversation_state.get("awaiting_verification", False):
                     # This is a verification response
                     return self._process_verification(inputs)
@@ -184,6 +191,7 @@ class LookerExploreWorkflow(Chain, BaseModel):
             # Create initial state with SDK included
             state = {
                 "user_query": inputs["query"],
+                "standard_fields": standard_fields,
                 "model_manager": self.model_manager,
                 "looker_instance_url": self.looker_instance_url,
                 "request_visualization": inputs.get("request_visualization", False),
