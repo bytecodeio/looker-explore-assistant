@@ -65,7 +65,7 @@ def format_explore_metadata(data):
 def fetch_query_url_metadata(sdk, explore=None, dashboard_id=None):
     try:
         filters = {
-            "history.status": "complete",
+            # "history.status": "complete",
         }
         
         if explore:
@@ -245,7 +245,7 @@ def generate_input(request):
         Here is an example of a properly formatted response:
         {"input": "customer with lifetime revenue > 100", "output": "fields=user_order_facts.lifetime_revenue&f[user_order_facts.lifetime_revenue]=>100&sorts=user_order_facts.lifetime_revenue desc 0&limit=500"}
         Please alwasy respond with a only a json object with the fields 'input' and 'output', as you see above. Please do not respond in markup or using markup tags like ```. Here is an output that needs a matching input response you generate: '''
-    model = GenerativeModel("gemini-pro")
+    model = GenerativeModel("gemini-2.0-flash-lite-001")
     response = model.generate_content(
         contents=prompt_prefix + request,
         generation_config=GenerationConfig(

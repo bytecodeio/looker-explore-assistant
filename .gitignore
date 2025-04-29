@@ -15,3 +15,5 @@ dist
 
 explore-assistant-backend/terraform/backend.tf
 generated_examples
+explore-assistant-examples/combined_examples.csv
+explore-assistant-examples/generated_examples_combined
