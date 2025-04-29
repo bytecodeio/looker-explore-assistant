@@ -299,17 +299,48 @@ ${exploreRefinementExamples &&
 
       const queryId = createQuery.id
       if (queryId === undefined || queryId === null) {
-        return 'There was an error!!'
+        return 'There was an error creating query!!'
       }
-      const result = await core40SDK.ok(
-        core40SDK.run_query({
+      
+      // Create an async query task instead of directly running the query
+      const queryTask = await core40SDK.ok(
+        core40SDK.create_query_task({
           query_id: queryId,
-          result_format: 'md',
-        }),
+          result_format: 'md'
+        })
+      )
+      
+      if (!queryTask.id) {
+        return 'There was an error creating query task!!'
+      }
+      
+      // Poll the task status until it completes
+      let taskComplete = false
+      let taskStatus: any
+      while (!taskComplete) {
+        taskStatus = await core40SDK.ok(
+          core40SDK.query_task(queryTask.id)
+        )
+        
+        if (taskStatus.status === 'complete' || taskStatus.status === 'error') {
+          taskComplete = true
+        } else {
+          // Wait a bit before polling again
+          await new Promise(resolve => setTimeout(resolve, 400))
+        }
+      }
+      
+      if (taskStatus.status === 'error') {
+        return 'There was an error running the query!!'
+      }
+      
+      // Get the results from the completed task
+      const result = await core40SDK.ok(
+        core40SDK.query_task_results(queryTask.id)
       )
 
-      if (result.length === 0) {
-        return 'There was an error!!'
+      if (!result || result.length === 0) {
+        return 'There was an error retrieving query results!!'
       }
 
       const contents = `
@@ -419,96 +450,135 @@ ${exploreRefinementExamples &&
     }
     return lookerEncoding;
   };
-  const generateFilterParams = useCallback(
-    async (prompt: string, sharedContext: string, dimensions: any[], measures: any[]) => {
-      // get the filters
-      const filterContents = `
-      ${sharedContext}
+  const validateFilters = useCallback(
+    (filterResponseJSON: any, dimensions: any[], measures: any[]) => {
+      const validatedFilters: any = {}
       
-     # Instructions
-     
-     The user asked the following question:
-     
-     \`\`\`
-     ${prompt}
-     \`\`\`
-     
-     Your job is to follow the steps below and generate a JSON object.
-     
-     * Step 1: Your task is the look at the following data question that the user is asking and determine the filter expression for it. You should return a JSON list of filters to apply. Each element in the list will be a pair of the field id and the filter expression. Your output will look like \`[ { "field_id": "example_view.created_date", "filter_expression": "this year" } ]\`
-     * Step 2: verify that you're only using valid expressions for the filter values. If you do not know what the valid expressions are, refer to the table above. If you are still unsure, don't use the filter.
-     * Step 3: verify that the field ids are indeed Field Ids from the table. If they are not, you should return an empty dictionary. There should be a period in the field id.
-     `
-
-      const filterResponseInitial = await sendMessage(filterContents, {})
-
-      // check the response
-      const filterContentsCheck =
-        filterContents +
-        `
-  
-           # Output
-     
-           ${filterResponseInitial}
-     
-           # Instructions
-     
-           Verify the output, make changes and return the JSON
-     
-           `
-      const filterResponseCheck = await sendMessage(filterContentsCheck, {})
-      const filterResponseCheckJSON = parseJSONResponse(filterResponseCheck)
-
-      // Ensure filterResponseCheckJSON is an array
-      const filterResponseArray = Array.isArray(filterResponseCheckJSON) ? filterResponseCheckJSON : []
-
+      // If filters is not an object, return empty object
+      if (!filterResponseJSON || typeof filterResponseJSON !== 'object') {
+        return validatedFilters
+      }
+      
       // Iterate through each filter
-      const filterResponseJSON: any = {}
-
-      // Validate each filter
-      filterResponseArray.forEach(function (filter: {
-        field_id: string
-        filter_expression: string
-      }) {
-        const field =
-          dimensions.find((d) => d.name === filter.field_id) ||
-          measures.find((m) => m.name === filter.field_id)
+      Object.entries(filterResponseJSON).forEach(([fieldId, expression]) => {
+        const field = dimensions.find((d) => d.name === fieldId) ||
+                     measures.find((m) => m.name === fieldId)
 
         if (!field) {
-          console.log(`Invalid field: ${filter.field_id}`)
+          console.log(`Invalid field: ${fieldId}`)
           return
         }
 
         console.log(field)
-
-        const isValid = ExploreFilterValidator.isFilterValid(
-          field.type as FieldType,
-          filter.filter_expression,
-        )
-
-        if (!isValid) {
-          console.log(
-            `Invalid filter expression for field ${filter.field_id}: ${filter.filter_expression}`,
+        
+        // Handle both string and array expressions
+        const expressions = Array.isArray(expression) ? expression : [expression]
+        const validExpressions = []
+        
+        for (const expr of expressions) {
+          const isValid = ExploreFilterValidator.isFilterValid(
+            field.type as FieldType,
+            expr
           )
-          return
-        }
 
-        // Check if the field_id already exists in the hash
-        if (!filterResponseJSON[filter.field_id]) {
-          // If not, create an empty array for this field_id
-          filterResponseJSON[filter.field_id] = []
+          if (isValid) {
+            validExpressions.push(expr)
+          } else {
+            console.log(
+              `Invalid filter expression for field ${fieldId}: ${expr}`
+            )
+          }
         }
-        // Push the filter_expression into the array
-        filterResponseJSON[filter.field_id].push(filter.filter_expression)
+        
+        if (validExpressions.length > 0) {
+          validatedFilters[fieldId] = validExpressions.length === 1 ? 
+            validExpressions[0] : validExpressions
+        }
       })
 
-      console.log('filterResponseInitial', filterResponseInitial)
-      console.log('filterResponseCheckJSON', filterResponseCheckJSON)
-      console.log('filterResponseJSON', filterResponseJSON)
-
-      return filterResponseJSON
+      return validatedFilters
     },
-    [],
+    []
+  )
+
+  const generateBaseExploreParams = useCallback(
+    async (
+      prompt: string,
+      sharedContext,
+    ) => {
+      const currentDateTime = new Date().toISOString()
+
+      const contents = `
+      ${sharedContext}
+      
+      Output
+      ----------
+      
+      Return a JSON that is compatible with the Looker API run_inline_query function as per the spec. Here is an example:
+      
+      {
+        "model":"${currentExplore.modelName}",
+        "view":"${currentExplore.exploreId}",
+        "fields":["category.name","inventory_items.days_in_inventory_tier","products.count"],
+        "filters":{"category.name":"socks"},
+        "sorts":["products.count desc 0"],
+        "limit":"500",
+      }
+      
+      Instructions:
+      - choose only the fields in the below lookml metadata
+      - prioritize the field description, label, tags, and name for what field(s) to use for a given description
+      - generate only one answer, no more.
+      - use the Examples for guidance on how to structure the body
+      - try to avoid adding dynamic_fields, provide them when very similar example is found in the bottom
+      - Always use the provided current date (${currentDateTime}) when generating Looker URL queries that involve TIMEFRAMES.
+      - For filters, verify that you're only using valid expressions for the filter values.
+      - For filters, verify that the field ids are indeed Field Ids from the metadata tables. There should be a period in the field id.
+      - only respond with a JSON object
+        
+      User Request
+      ----------
+      ${prompt}
+      
+      `
+
+      const parameters = {
+        max_output_tokens: 1000,
+      }
+      console.log(contents)
+      const response = await sendMessage(contents, parameters)
+      const responseJSON = parseJSONResponse(response)
+
+      return responseJSON
+    },
+    [currentExplore],
+  )
+
+  const generateExploreParams = useCallback(
+    async (
+      prompt: string,
+      dimensions: any[],
+      measures: any[],
+      exploreGenerationExamples: any[],
+    ) => {
+      if (!dimensions.length || !measures.length) {
+        showBoundary(new Error('Dimensions or measures are not defined'))
+        return
+      }
+      const sharedContext = generateSharedContext(dimensions, measures, exploreGenerationExamples) || ''
+      
+      // Make a single call to get all explore parameters including filters
+      const responseJSON = await generateBaseExploreParams(prompt, sharedContext)
+      
+      // Extract and validate the filters that were included in the response
+      const validatedFilters = validateFilters(responseJSON.filters, dimensions, measures)
+      
+      // Update the filters in the response with the validated filters
+      responseJSON.filters = validatedFilters
+
+      return responseJSON
+    },
+    [settings],
   )
 
   const generateVisualizationParams = async (
@@ -555,89 +625,6 @@ ${exploreRefinementExamples &&
     return parseJSONResponse(response)
   }
 
-  const generateBaseExploreParams = useCallback(
-    async (
-      prompt: string,
-      sharedContext,
-    ) => {
-      const currentDateTime = new Date().toISOString()
-
-      const contents = `
-      ${sharedContext}
-      
-      Output
-      ----------
-      
-      Return a JSON that is compatible with the Looker API run_inline_query function as per the spec. Here is an example:
-      
-      {
-        "model":"${currentExplore.modelName}",
-        "view":"${currentExplore.exploreId}",
-        "fields":["category.name","inventory_items.days_in_inventory_tier","products.count"],
-        "filters":{"category.name":"socks"},
-        "sorts":["products.count desc 0"],
-        "limit":"500",
-      }
-      
-      Instructions:
-      - choose only the fields in the below lookml metadata
-      - prioritize the field description, label, tags, and name for what field(s) to use for a given description
-      - generate only one answer, no more.
-      - use the Examples for guidance on how to structure the body
-      - try to avoid adding dynamic_fields, provide them when very similar example is found in the bottom
-      - Always use the provided current date (${currentDateTime}) when generating Looker URL queries that involve TIMEFRAMES.
-      - only respond with a JSON object
-        
-      User Request
-      ----------
-      ${prompt}
-      
-      `
-
-      const parameters = {
-        max_output_tokens: 1000,
-      }
-      console.log(contents)
-      const response = await sendMessage(contents, parameters)
-      const responseJSON = parseJSONResponse(response)
-
-      return responseJSON
-    },
-    [currentExplore],
-  )
-
-  const generateExploreParams = useCallback(
-    async (
-      prompt: string,
-      dimensions: any[],
-      measures: any[],
-      exploreGenerationExamples: any[],
-    ) => {
-      if (!dimensions.length || !measures.length) {
-        showBoundary(new Error('Dimensions or measures are not defined'))
-        return
-      }
-      const sharedContext = generateSharedContext(dimensions, measures, exploreGenerationExamples) || ''
-      const filterResponseJSON = await generateFilterParams(prompt, sharedContext, dimensions, measures)
-      const responseJSON = await generateBaseExploreParams(prompt, sharedContext)
-
-      responseJSON['filters'] = filterResponseJSON
-
-      // get the visualizations
-      // const visualizationResponseJSON = await generateVisualizationParams(
-      //   responseJSON,
-      //   prompt,
-      // )
-
-      // console.log(visualizationResponseJSON)
-
-      // responseJSON['vis_config'] = visualizationResponseJSON
-
-      return responseJSON
-    },
-    [settings],
-  )
-
   const sendMessage = async (message: string, parameters: BigQueryParameters) => {
     const wrappedMessage = promptWrapper(message)
     try {
@@ -652,7 +639,6 @@ ${exploreRefinementExamples &&
   return {
     generateExploreParams,
     generateBaseExploreParams,
-    generateFilterParams,
     generateVisualizationParams,
     sendMessage,
     summarizePrompts,
