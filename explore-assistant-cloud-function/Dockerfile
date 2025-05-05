@@ -8,13 +8,16 @@ WORKDIR /app
 COPY . /app
 
 # Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# use cache-dir to cache the dependencies
+# and avoid re-downloading them if they haven't changed
+RUN pip install --cache-dir=./cache/pip -r requirements.txt
 
 # Make port 8080 available to the world outside this container
 EXPOSE 8080
 
 # Define environment variable
 ENV PORT=8080
+ENV FUNCTION_TARGET=cloud_function_entrypoint
 
-# Run the application
-CMD ["python", "main.py"]
+# Run the function using functions-framework
+CMD exec functions-framework --target=${FUNCTION_TARGET} --port=${PORT}

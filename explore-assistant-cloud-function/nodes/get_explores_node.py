@@ -1,11 +1,13 @@
 import logging
+import os
+import ssl
 from typing import Dict
 from google.cloud import bigquery
-from looker_sdk import init40, error
+from looker_sdk import error
 
-def init_looker_sdk():
-    sdk = init40()
-    return sdk
+# Import the centralized SDK initialization function
+from utils.looker_sdk_utils import init_looker_sdk
+from utils.bigquery_utils import ensure_table_exists
 
 def fetch_explores(sdk):
     try:
@@ -15,19 +17,32 @@ def fetch_explores(sdk):
         logging.error(f"Error fetching explores: {e}")
         return []
 
-def check_table_data(project_id, dataset_id, table_id):
-    client = bigquery.Client(project=project_id)
-    query = f"SELECT COUNT(*) as count FROM `{project_id}.{dataset_id}.{table_id}`"
-    query_job = client.query(query)
-    result = query_job.result()
-    count = [row['count'] for row in result][0]
-    return count > 0
+def check_table_data(client, project_id, dataset_id, table_id):
+    try:
+        # First ensure the table exists
+        if not ensure_table_exists(client, project_id, dataset_id, table_id, "explore_descriptions"):
+            logging.error(f"Failed to create or verify table {project_id}.{dataset_id}.{table_id}")
+            return False
+            
+        # Then check if it has data
+        query = f"SELECT COUNT(*) as count FROM `{project_id}.{dataset_id}.{table_id}`"
+        query_job = client.query(query)
+        result = query_job.result()
+        count = [row['count'] for row in result][0]
+        return count > 0
+    except Exception as e:
+        logging.error(f"Error checking table data: {e}")
+        return False
 
 def get_explores_node(state: Dict) -> Dict:
-    project_id = "combined-genai-bi"
-    dataset_id = "explore_assistant"
+    project_id = os.environ.get("PROJECT", "combined-genai-bi")
+    dataset_id = os.environ.get("DATASET", "bytecode")
     table_id = "explore_descriptions"
-    if check_table_data(project_id, dataset_id, table_id):
+    
+    # Create BigQuery client
+    client = bigquery.Client(project=project_id)
+    
+    if check_table_data(client, project_id, dataset_id, table_id):
         logging.info("Table contains data. Transitioning to fetch_and_return_data node.")
         return {"transition_to": "fetch_and_return_data"}
     

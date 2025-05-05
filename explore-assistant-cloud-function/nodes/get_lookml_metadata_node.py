@@ -1,9 +1,27 @@
 import logging
+import os
+import ssl
 from typing import Dict
 from looker_sdk import init40, error
 
+# Import the centralized SDK initialization function
+from utils.looker_sdk_utils import init_looker_sdk
+
 def init_looker_sdk():
+    """Initialize Looker SDK with proper certificate handling"""
+    # Get SSL verification setting from environment with proper boolean conversion
+    verify_ssl = os.environ.get('LOOKERSDK_VERIFY_SSL', 'true').lower()
+    verify_ssl = verify_ssl == 'true' or verify_ssl == '1'
+    
+    if not verify_ssl:
+        # Suppress certificate warnings if verification is disabled
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        logging.info("SSL certificate verification disabled")
+    
+    # Initialize the SDK with the environment variables
     sdk = init40()
+    logging.debug("Looker SDK initialized successfully")
     return sdk
 
 def fetch_lookml_metadata(sdk, model, explore_name):
@@ -18,6 +36,7 @@ def get_lookml_metadata_node(state: Dict) -> Dict:
     if state["current_explore_index"] >= len(state["explores"]):
         logging.error("Explores list is empty in get_lookml_metadata_node.")
         return state  # Return state as is if explores list is empty
+    
     sdk = init_looker_sdk()
     while state["current_explore_index"] < len(state["explores"]):
         explore = state["explores"][state["current_explore_index"]]

@@ -1,15 +1,33 @@
 import logging
 import json
 import urllib.parse
+import os
+import ssl
 from typing import Dict, Any, List, Tuple, Optional
-from looker_sdk import init40, error
+from looker_sdk import error
 from langchain_core.messages import AIMessage
 from looker_sdk.sdk.api40 import models as looker_models
+
+# Import the centralized SDK initialization function
+from utils.looker_sdk_utils import init_looker_sdk
 
 logger = logging.getLogger(__name__)
 
 def init_looker_sdk():
+    """Initialize Looker SDK with proper certificate handling"""
+    # Get SSL verification setting from environment with proper boolean conversion
+    verify_ssl = os.environ.get('LOOKERSDK_VERIFY_SSL', 'true').lower()
+    verify_ssl = verify_ssl == 'true' or verify_ssl == '1'
+    
+    if not verify_ssl:
+        # Suppress certificate warnings if verification is disabled
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        logger.info("SSL certificate verification disabled")
+    
+    # Initialize the SDK with the environment variables
     sdk = init40()
+    logger.debug("Looker SDK initialized successfully")
     return sdk
 
 def execute_explore(sdk, explore_params: Dict[str, Any], result_format: str = "md") -> Tuple[Any, Optional[bytes]]:
@@ -357,19 +375,14 @@ def execute_explore_node(state: Dict[str, Any]) -> Dict[str, Any]:
     explore_params = state.get("explore_params", {})
     if not explore_params:
         logger.warning("Missing explore_params in state")
-        return {
-            **state,
-            "messages": state.get("messages", []) + [
-                AIMessage(content="I couldn't generate explore parameters to answer your question.")
-            ]
-        }
+        return add_message_to_state(state, "I couldn't generate explore parameters to answer your question.")
         
     # Try to get the SDK from state or initialize it
     sdk = state.get("looker_sdk")
     if not sdk:
         logger.warning("Missing looker_sdk in state - trying to initialize")
         try:
-            sdk = init40()
+            sdk = init_looker_sdk()
             # Test connection
             sdk.me()
             logger.info("Successfully initialized Looker SDK")
@@ -377,19 +390,14 @@ def execute_explore_node(state: Dict[str, Any]) -> Dict[str, Any]:
             state["looker_sdk"] = sdk
         except error.SDKError as e:
             logger.error(f"Failed to initialize Looker SDK: {e}")
-            return {
-                **state,
-                "messages": state.get("messages", []) + [
-                    AIMessage(content="I couldn't connect to Looker to run your query.")
-                ]
-            }
+            return add_message_to_state(state, "I couldn't connect to Looker to run your query.")
     
     looker_instance_url = state.get("looker_instance_url", "")
     request_visualization = state.get("request_visualization", False)
     user_query = state.get("user_query", "")
     
     try:
-        # Generate the explore URL
+        # Generate the explore URL using utility function
         explore_url = generate_explore_url(looker_instance_url, explore_params)
         
         # Print the explore parameters for debugging
@@ -399,12 +407,7 @@ def execute_explore_node(state: Dict[str, Any]) -> Dict[str, Any]:
         # Make sure we have all the required fields for the query
         if not explore_params.get("model") or not explore_params.get("view"):
             logger.error("Missing model or view in explore_params")
-            return {
-                **state,
-                "messages": state.get("messages", []) + [
-                    AIMessage(content="I couldn't generate a valid query because the model or view information is missing.")
-                ]
-            }
+            return add_message_to_state(state, "I couldn't generate a valid query because the model or view information is missing.")
             
         if not explore_params.get("fields"):
             logger.warning("No fields specified in explore_params")
@@ -432,12 +435,7 @@ def execute_explore_node(state: Dict[str, Any]) -> Dict[str, Any]:
         
         if not query_id:
             logger.error("Failed to create query object")
-            return {
-                **state,
-                "messages": state.get("messages", []) + [
-                    AIMessage(content="I couldn't create a valid query in Looker.")
-                ]
-            }
+            return add_message_to_state(state, "I couldn't create a valid query in Looker.")
         
         # Run the query and get JSON results
         logger.info(f"Executing query with ID: {query_id}")

@@ -1,12 +1,13 @@
 import logging
 import json
+import os
+import ssl
 from typing import Dict, List
 from looker_sdk import init40, error
 from langchain_core.messages import AIMessage
 
-def init_looker_sdk():
-    sdk = init40()
-    return sdk
+# Import the centralized SDK initialization function
+from utils.looker_sdk_utils import init_looker_sdk
 
 def get_available_explores(sdk):
     """Fetch all available explores from Looker"""

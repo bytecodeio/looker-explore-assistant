@@ -1,16 +1,15 @@
 import logging
 import json
-import re
-import os
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 from langchain_core.messages import AIMessage
 from langchain_core.language_models import BaseLLM
-# Remove the unused import
-# from langchain_google_vertexai import VertexAI
 
+# Import utility functions
 from utils.document_loader import DocumentLoader
 from utils.query_analyzer import QueryAnalyzer
+from utils.response_utils import extract_json_from_response, parse_json_response, add_message_to_state
+from utils.field_utils import ExploreFieldValidator
 
 # Field type validation constants
 FIELD_TYPES = {
@@ -142,78 +141,113 @@ def extract_json_from_response(response: str) -> str:
     # No code block found, return the response as is
     return response.strip()
 
-def generate_filter_params(llm: BaseLLM, prompt: str, shared_context: str, dimensions: List[Dict], measures: List[Dict]) -> Dict:
-    """Generate filter parameters for the explore using the provided LLM"""
-    filter_contents = f"""
-      {shared_context}
-      
-     # Instructions
-     
-     The user asked the following question:
-     
-     ```
-     {prompt}
-     ```
-     
-     Your job is to follow the steps below and generate a JSON object.
-     
-     * Step 1: Your task is to look at the following data question that the user is asking and determine the filter expression for it. You should return a JSON list of filters to apply. Each element in the list will be a pair of the field id and the filter expression. Your output will look like `[ {{ "field_id": "example_view.created_date", "filter_expression": "this year" }} ]`
-     * Step 2: verify that you're only using valid expressions for the filter values. If you do not know what the valid expressions are, refer to the table above. If you are still unsure, don't use the filter.
-     * Step 3: verify that the field ids are indeed Field Ids from the table. If they are not, you should return an empty list. There should be a period in the field id.
-     
-     Think carefully about the filters that should be applied based on the user's question.
-     """
-
-    try:
-        filter_response = llm.predict(filter_contents)
+def generate_filter_params_with_retry(
+    llm: BaseLLM, 
+    user_query: str, 
+    semantic_model: Dict[str, Any], 
+    dimensions: List[Dict], 
+    measures: List[Dict],
+    invalid_filters: Dict[str, str] = None,
+    max_retries: int = 1
+) -> Tuple[Dict[str, Any], Dict[str, str]]:
+    """
+    Generate filter parameters for Looker explore with retry mechanism for invalid filters
+    
+    Args:
+        llm: Language model to generate filters
+        user_query: User's original query
+        semantic_model: Semantic model containing field information
+        dimensions: List of dimension fields
+        measures: List of measure fields
+        invalid_filters: Dictionary of invalid filters from previous attempts with reasons
+        max_retries: Maximum number of retry attempts
         
-        # Extract JSON from potentially markdown-formatted response
-        clean_json_str = extract_json_from_response(filter_response)
+    Returns:
+        Tuple of (valid_filters, remaining_invalid_filters)
+    """
+    attempt = 0
+    valid_filters = {}
+    remaining_invalid_filters = {}
+    
+    # Format dimensions and measures for prompt
+    dimension_str = "\n".join([
+        f"- {d.get('name')}: {d.get('label', '')} ({d.get('type', '')}) - {d.get('description', 'No description')}"
+        for d in dimensions[:20]
+    ])
+    
+    measure_str = "\n".join([
+        f"- {m.get('name')}: {m.get('label', '')} ({m.get('type', '')}) - {m.get('description', 'No description')}"
+        for m in measures[:20]
+    ])
+    
+    while attempt <= max_retries:
+        # Provide feedback on invalid filters for retry attempts
+        feedback_str = ""
+        if invalid_filters and attempt > 0:
+            feedback_str = "Previous filter generation had the following invalid filters:\n"
+            for field, reason in invalid_filters.items():
+                feedback_str += f"- {field}: {reason}\n"
+            feedback_str += "\nPlease correct these issues in your response."
         
-        # Try to parse the cleaned JSON response
+        # Create prompt for filter generation
+        filter_prompt = f"""
+        You are a Looker query expert. Given a user's question, generate appropriate filter expressions for a Looker explore.
+        
+        User Question: {user_query}
+        
+        Available dimensions:
+        {dimension_str}
+        
+        Available measures:
+        {measure_str}
+        
+        {feedback_str}
+        
+        For each filter, provide:
+        1. The exact field name from the available fields
+        2. A valid filter expression according to Looker's filter syntax:
+           - For dates: 'today', 'yesterday', 'last 7 days', 'this month', etc.
+           - For strings: Use '%' for wildcards, '-' for negation
+           - For numbers: Use comparison operators like '>', '<', '=', 'between X and Y'
+           - For booleans: Use 'yes'/'no' or 'true'/'false'
+        
+        Return your response as a JSON object with field names as keys and filter expressions as values:
+        {{
+          "field_name1": "filter_expression1",
+          "field_name2": "filter_expression2"
+        }}
+        
+        DO NOT make up field names - only use fields from the list provided.
+        """
+        
         try:
-            filter_response_json = json.loads(clean_json_str)
+            # Generate filter response
+            response = llm.predict(filter_prompt)
+            filters = parse_json_response(response, default_value={})
             
-            if not isinstance(filter_response_json, list):
-                logging.warning("Filter response is not a list, returning empty dict")
-                return {}
+            if not filters:
+                logging.warning("Failed to parse filter response as JSON or empty response")
+                break
                 
-            # Convert the list format to the dictionary format expected by Looker
-            filter_dict = {}
-            for filter_item in filter_response_json:
-                field_id = filter_item.get("field_id")
-                filter_expression = filter_item.get("filter_expression")
-                
-                if not field_id or not filter_expression:
-                    continue
-                    
-                # Validate the filter
-                field = next((d for d in dimensions if d["name"] == field_id), None)
-                if not field:
-                    field = next((m for m in measures if m["name"] == field_id), None)
-                
-                if not field:
-                    logging.warning(f"Field {field_id} not found in dimensions or measures")
-                    continue
-                    
-                if not ExploreFilterValidator.is_filter_valid(field.get("type", ""), filter_expression):
-                    logging.warning(f"Invalid filter expression for field {field_id}: {filter_expression}")
-                    continue
-                    
-                # Add to filter dictionary
-                if field_id not in filter_dict:
-                    filter_dict[field_id] = []
-                filter_dict[field_id].append(filter_expression)
-                
-            return filter_dict
-                
-        except json.JSONDecodeError:
-            logging.error(f"Failed to parse filter response as JSON: {clean_json_str}")
-            return {}
+            # Validate the generated filters
+            valid_filters, remaining_invalid_filters = ExploreFieldValidator.validate_filters_with_feedback(
+                filters, semantic_model
+            )
             
-    except Exception as e:
-        logging.error(f"Error generating filter parameters: {e}")
-        return {}
+            # If no invalid filters or reached max retries, break the loop
+            if not remaining_invalid_filters or attempt >= max_retries:
+                break
+                
+            # Update invalid filters for next attempt
+            invalid_filters = remaining_invalid_filters
+            
+        except Exception as e:
+            logging.error(f"Error generating filter parameters (attempt {attempt+1}): {e}")
+            break
+            
+        attempt += 1
+    
+    return valid_filters, remaining_invalid_filters
 
 def generate_base_explore_params(llm: BaseLLM, prompt: str, shared_context: str, model_name: str, explore_id: str) -> Dict:
     """Generate base explore parameters using the provided LLM"""
@@ -328,39 +362,56 @@ def explore_params_generator_node(state: Dict) -> Dict:
         Updated state with explore parameters
     """
     if "semantic_model" not in state or "user_query" not in state:
+        logging.error("Missing semantic_model or user_query in state")
         return state
     
     llm = state.get("llm")
     if not llm:
+        logging.error("Missing LLM in state")
         return state
     
     semantic_model = state["semantic_model"]
     user_query = state["user_query"]
-    field_mapping = state.get("field_mapping", {})
     
-    # Format semantic model for LLM
+    # Extract model name and explore ID from semantic model
+    model_name = semantic_model.get("modelName")
+    explore_id = semantic_model.get("exploreId")
+    
+    if not model_name or not explore_id:
+        logging.error(f"Missing modelName or exploreId in semantic model: {semantic_model}")
+        return add_message_to_state(state, "I couldn't generate a valid query because the model information is missing.")
+    
+    # Get available dimensions and measures from the semantic model
+    dimensions = semantic_model.get("dimensions", [])
+    measures = semantic_model.get("measures", [])
+    
+    dimension_names, measure_names = ExploreFieldValidator.get_field_names_by_type(semantic_model)
+    
+    if not dimension_names and not measure_names:
+        logging.error("No dimensions or measures found in semantic model")
+        return add_message_to_state(state, f"I couldn't find any fields in the {model_name}.{explore_id} explore.")
+    
+    logging.info(f"Available dimensions: {dimension_names[:5]}...")
+    logging.info(f"Available measures: {measure_names[:5]}...")
+    
+    # Format field information for the LLM prompt
     dimensions_str = "\n".join([
-        f"- {d.get('name')}: {d.get('label')} ({d.get('type')}) - {d.get('description', 'No description')}"
-        for d in semantic_model.get("dimensions", [])
+        f"- {d.get('name')}: {d.get('label', '')} ({d.get('type', '')}) - {d.get('description', 'No description')}"
+        for d in dimensions[:30]  # Limit to first 30 to avoid token limits
     ])
     
     measures_str = "\n".join([
-        f"- {m.get('name')}: {m.get('label')} ({m.get('type')}) - {m.get('description', 'No description')}"
-        for m in semantic_model.get("measures", [])
+        f"- {m.get('name')}: {m.get('label', '')} ({m.get('type', '')}) - {m.get('description', 'No description')}"
+        for m in measures[:30]  # Limit to first 30 to avoid token limits
     ])
-    
-    # Include field mapping information
-    field_mapping_str = ""
-    if field_mapping:
-        field_mapping_str = "User field mappings:\n" + "\n".join([
-            f"- '{alias}' refers to '{std_field}'"
-            for alias, std_field in field_mapping.items()
-        ])
     
     # Generate explore parameters using LLM
     prompt = f"""
-    You are an expert data analyst. Generate Looker explore parameters to answer this question:
-    {user_query}
+    You are an expert Looker query builder. Your task is to create a Looker query to answer this question:
+    
+    "{user_query}"
+    
+    The query should use the Looker explore "{model_name}.{explore_id}".
     
     Available dimensions:
     {dimensions_str}
@@ -368,32 +419,91 @@ def explore_params_generator_node(state: Dict) -> Dict:
     Available measures:
     {measures_str}
     
-    {field_mapping_str}
-    
-    Return only a JSON object with these fields:
-    - fields: Array of field names to include
+    Return a JSON object with these fields:
+    - model: The model name ("{model_name}")
+    - view: The explore name ("{explore_id}")
+    - fields: Array of field names to include (must be valid dimension or measure names from the lists above)
     - sorts: Array of fields to sort by with direction (e.g. ["field_name desc"])
-    - filters: Object of filter conditions (e.g. {{"field_name": "filter_value"}})
-    - limit: Number of results to return (default: 10)
+    - limit: Number of results to return (default: 500)
+    
+    IMPORTANT:
+    1. Only use field names that exist in the lists above
+    2. Do not make up field names
+    3. Do not include "field1", "field2", etc. - use real field names
+    4. Include at least one dimension and one measure in the fields
+    5. Return ONLY the valid JSON object with no additional text or explanation
     """
     
-    # Get LLM response
-    response = llm.invoke(prompt)
-    
-    # Process response and integrate with field mappings
-    # Actual implementation will depend on how your LLM returns the structured data
-    
-    # Return updated state with explore parameters
-    return {
-        **state,
-        "explore_params": {
-            # Sample explore params structure - replace with actual LLM output processing
-            "fields": ["field1", "field2"],
-            "sorts": ["field1 desc"],
-            "filters": {"field3": "value"},
-            "limit": 10
-        },
-        "messages": state.get("messages", []) + [
-            AIMessage(content=f"I'll analyze {semantic_model.get('modelName')}.{semantic_model.get('exploreId')} data to answer your question.")
-        ]
-    }
+    try:
+        # Get LLM response
+        logging.info(f"Sending explore params generation prompt to LLM, length: {len(prompt)}")
+        response = llm.predict(prompt)
+        logging.info(f"Received LLM response for explore params, length: {len(response)}")
+        
+        # Parse and validate JSON response using utility function
+        params = parse_json_response(response, default_value={})
+        
+        if not params:
+            logging.warning("Failed to parse or empty response from LLM, using fallback params")
+            fallback_params = {
+                "model": model_name,
+                "view": explore_id,
+                "fields": dimension_names[:1] + measure_names[:1],  # Take first dimension and measure
+                "filters": {},
+                "limit": "500"
+            }
+            
+            return {
+                **state,
+                "explore_params": fallback_params,
+                "messages": state.get("messages", []) + [
+                    AIMessage(content=f"I'll analyze {model_name}.{explore_id} data with a simple query to help answer your question.")
+                ]
+            }
+        
+        # Generate filters with retry mechanism
+        filters, invalid_filters = generate_filter_params_with_retry(
+            llm, user_query, semantic_model, dimensions, measures, max_retries=1
+        )
+        
+        # Add filters to params
+        params["filters"] = filters
+        
+        # Validate the explore parameters
+        validated_params = ExploreFieldValidator.validate_explore_params(params, semantic_model)
+        
+        # Add warning about invalid filters if any
+        messages = state.get("messages", [])
+        if invalid_filters:
+            invalid_filter_msg = "Note: Some filters couldn't be applied: " + ", ".join(invalid_filters.keys())
+            messages.append(AIMessage(content=invalid_filter_msg))
+        
+        messages.append(AIMessage(content=f"I'll analyze {model_name}.{explore_id} data to answer your question."))
+        
+        # Log the final params
+        logging.info(f"Final explore params: {json.dumps(validated_params)}")
+        
+        # Return updated state with validated explore parameters
+        return {
+            **state,
+            "explore_params": validated_params,
+            "invalid_filters": invalid_filters,  # Store invalid filters in state for reference
+            "messages": messages
+        }
+            
+    except Exception as e:
+        logging.error(f"Error generating explore parameters: {str(e)}")
+        
+        # Provide minimal fallback parameters
+        return {
+            **state,
+            "explore_params": {
+                "model": model_name,
+                "view": explore_id,
+                "fields": dimension_names[:1] + measure_names[:1],  # Take first dimension and measure
+                "limit": "500"
+            },
+            "messages": state.get("messages", []) + [
+                AIMessage(content=f"I encountered an issue while creating your query, but I'll try to answer with a basic analysis of {model_name}.{explore_id} data.")
+            ]
+        }

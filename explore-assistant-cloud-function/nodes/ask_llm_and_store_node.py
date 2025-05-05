@@ -1,8 +1,10 @@
 import logging
+import os
 from typing import Dict
 from google.cloud import bigquery
 from looker_sdk import init40, error
 from langchain_core.messages import AIMessage
+from utils.bigquery_utils import ensure_table_exists
 
 def ask_llm_about_queries(model_name, explore_name, metadata):
     # Placeholder for LLM interaction
@@ -10,10 +12,18 @@ def ask_llm_about_queries(model_name, explore_name, metadata):
 
 def store_in_bigquery(project_id, dataset_id, table_id, data):
     client = bigquery.Client(project=project_id)
+    
+    # Ensure table exists
+    if not ensure_table_exists(client, project_id, dataset_id, table_id, "explore_descriptions"):
+        logging.error(f"Failed to create or verify table {project_id}.{dataset_id}.{table_id}")
+        return False
+    
     table_ref = client.dataset(dataset_id).table(table_id)
     errors = client.insert_rows_json(table_ref, [data])
     if errors:
         logging.error(f"Error storing data in BigQuery: {errors}")
+        return False
+    return True
 
 def ask_llm_and_store_node(state: Dict) -> Dict:
     if state["current_explore_index"] >= len(state["explores"]):
@@ -32,8 +42,8 @@ def ask_llm_and_store_node(state: Dict) -> Dict:
     state["potential_queries"][explore_name] = llm_response  # Store the LLM generated summary
     logging.info(f"LLM response for explore: {explore_name}")
 
-    project_id = "combined-genai-bi"
-    dataset_id = "explore_assistant"
+    project_id = os.environ.get("PROJECT", "combined-genai-bi")
+    dataset_id = os.environ.get("DATASET", "bytecode")
     table_id = "explore_descriptions"
     logging.info(f"Storing data for explore: {explore_name} using these potential queries: {state['potential_queries'][explore_name]}")
     if explore_name in state["potential_queries"]:
@@ -41,10 +51,12 @@ def ask_llm_and_store_node(state: Dict) -> Dict:
         data = {
             "explore": explore_name,
             "model": explore['model_name'],  # Add model field
-            "metadata": explore,
+            "metadata": json.dumps(explore),  # Convert to JSON string
             "potential_queries": state["potential_queries"][explore_name]
         }
-        store_in_bigquery(project_id, dataset_id, table_id, data)
+        store_success = store_in_bigquery(project_id, dataset_id, table_id, data)
+        if not store_success:
+            logging.error(f"Failed to store data for explore {explore_name}")
     state["processed_explores"].add(explore_name)  # Mark explore as processed
     state["current_explore_index"] += 1  # Increment the index after storing data
     logging.info(f"Updated current_explore_index: {state['current_explore_index']}")

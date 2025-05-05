@@ -12,3 +12,6 @@ vertexai>=0.0.1
 langchain_anthropic
 langchain_openai
 pydantic>=2.0.0
+looker-sdk>=23.2.0
+langsmith
+google-cloud-bigquery

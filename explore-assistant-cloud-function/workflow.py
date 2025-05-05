@@ -1,3 +1,4 @@
+import os
 import logging
 from typing import Dict, Any, Optional
 from langchain_core.messages import HumanMessage, AIMessage
@@ -25,12 +26,15 @@ from nodes.example_storage_node import example_storage_node
 # Import utils
 from utils.model_manager import ModelManager
 
+# Configure logging
+logger = logging.getLogger(__name__)
+
 class LookerExploreWorkflow(Chain, BaseModel):
     """
     A workflow that processes user queries and generates Looker explores
     """
     model_manager: ModelManager = Field(default_factory=ModelManager)
-    looker_instance_url: str = Field(default="https://your-looker-instance.cloud.looker.com")
+    looker_instance_url: str = Field(default_factory=lambda: os.environ.get('LOOKERSDK_BASE_URL', 'https://your-looker-instance.cloud.looker.com'))
     conversation_state: Dict[str, Any] = Field(default_factory=dict, exclude=True)
     looker_sdk: Optional[Looker40SDK] = Field(default=None)
     
@@ -160,12 +164,16 @@ class LookerExploreWorkflow(Chain, BaseModel):
             if not self.looker_sdk:
                 try:
                     # Try to initialize the SDK
+                    # This will use the environment variables LOOKERSDK_BASE_URL, LOOKERSDK_CLIENT_ID, LOOKERSDK_CLIENT_SECRET
                     self.looker_sdk = looker_sdk.init40()
                     # Test connection
                     self.looker_sdk.me()
-                    logger.info("Successfully initialized Looker SDK")
+                    logger.info(f"Successfully initialized Looker SDK using {os.environ.get('LOOKERSDK_BASE_URL')}")
                 except looker_error.SDKError as e:
                     logger.error(f"Failed to initialize Looker SDK: {e}")
+                    logger.error(f"LOOKERSDK_BASE_URL: {os.environ.get('LOOKERSDK_BASE_URL')}")
+                    logger.error(f"LOOKERSDK_CLIENT_ID is set: {'Yes' if os.environ.get('LOOKERSDK_CLIENT_ID') else 'No'}")
+                    logger.error(f"LOOKERSDK_CLIENT_SECRET is set: {'Yes' if os.environ.get('LOOKERSDK_CLIENT_SECRET') else 'No'}")
                     return {
                         "response": f"I couldn't connect to Looker: {str(e)}",
                         "explore_url": "",

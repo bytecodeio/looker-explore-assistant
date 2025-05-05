@@ -23,15 +23,18 @@ class ModelManager:
     Manages LLM models for different tasks in the workflow and testing framework
     """
     
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None, model_name: Optional[str] = None):
         """
         Initialize the model manager with configuration
         
         Args:
             config: Optional configuration for models
+            model_name: Optional specific model to use as default
         """
         self.config = config or {}
         self._models = {}
+        self.default_model_name = model_name or "gemini-pro"
+        
         # Default models for each task
         self._task_model_mapping = {
             "evaluation": "vertex",
@@ -109,9 +112,9 @@ class ModelManager:
                     except Exception as e:
                         logger.warning(f"Failed to initialize Vertex AI: {e}")
                 
-                # Create standard Vertex AI model - simplified approach
+                # Create standard Vertex AI model using the configured default model
                 model = GoogleVertexAI(
-                    model_name="gemini-pro",
+                    model_name=self.default_model_name,
                     project=self.vertex_project,
                     location=self.vertex_location,
                     max_output_tokens=1024,
@@ -134,9 +137,9 @@ class ModelManager:
                     temperature=self.config.get("temperature", 0.2)
                 )
             else:
-                # Default to Vertex AI
+                # Default to Vertex AI with the specific model provided
                 model = GoogleVertexAI(
-                    model_name="gemini-pro",
+                    model_name=self.default_model_name,
                     project=self.vertex_project,
                     location=self.vertex_location,
                     max_output_tokens=1024,
@@ -166,6 +169,18 @@ class ModelManager:
         # Clear cache if it exists
         if model_name in self._models:
             del self._models[model_name]
+    
+    def set_default_model(self, model_name: str) -> None:
+        """
+        Set the default model name to use
+        
+        Args:
+            model_name: Name of the model to use as default
+        """
+        self.default_model_name = model_name
+        # Clear model cache to force recreation with new default
+        self._models = {}
+        logger.info(f"Default model set to: {model_name}")
     
     def invoke_with_image(self, prompt: str, image_data: str) -> str:
         """

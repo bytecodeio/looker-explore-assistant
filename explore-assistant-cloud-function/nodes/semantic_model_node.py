@@ -1,10 +1,11 @@
 import logging
+import os
+import ssl
 from typing import Dict
 from looker_sdk import init40, error
 
-def init_looker_sdk():
-    sdk = init40()
-    return sdk
+# Import the centralized SDK initialization function
+from utils.looker_sdk_utils import init_looker_sdk
 
 def fetch_semantic_model(sdk, model_name, explore_name):
     """

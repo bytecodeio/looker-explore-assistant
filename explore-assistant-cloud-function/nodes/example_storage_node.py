@@ -1,8 +1,10 @@
 import logging
+import os
 import json
 from datetime import datetime
 from typing import Dict, Any
 from google.cloud import bigquery
+from utils.bigquery_utils import ensure_table_exists
 
 def is_positive_confirmation(user_response: str) -> bool:
     """
@@ -43,24 +45,13 @@ def store_example_in_bigquery(
     """
     try:
         client = bigquery.Client(project=project_id)
-        table_ref = client.dataset(dataset_id).table(table_id)
         
-        # Check if table exists, if not create it
-        try:
-            client.get_table(table_ref)
-        except Exception:
-            # Table doesn't exist, create it
-            schema = [
-                bigquery.SchemaField("original_query", "STRING"),
-                bigquery.SchemaField("user_feedback", "STRING"),
-                bigquery.SchemaField("original_params", "STRING"),
-                bigquery.SchemaField("improved_params", "STRING"),
-                bigquery.SchemaField("timestamp", "TIMESTAMP")
-            ]
-            
-            table = bigquery.Table(table_ref, schema=schema)
-            client.create_table(table)
-            logging.info(f"Created table {project_id}.{dataset_id}.{table_id}")
+        # Ensure table exists
+        if not ensure_table_exists(client, project_id, dataset_id, table_id, "feedback_examples"):
+            logging.error(f"Failed to create or verify table {project_id}.{dataset_id}.{table_id}")
+            return False
+        
+        table_ref = client.dataset(dataset_id).table(table_id)
         
         # Insert the row
         rows_to_insert = [{
@@ -119,8 +110,8 @@ def example_storage_node(state: Dict) -> Dict:
     }
     
     # Store in BigQuery
-    project_id = "your-project-id"  # Replace with your actual project ID
-    dataset_id = "explore_assistant"
+    project_id = os.environ.get("PROJECT", "combined-genai-bi")
+    dataset_id = os.environ.get("DATASET", "bytecode")
     table_id = "feedback_examples"
     
     storage_success = store_example_in_bigquery(

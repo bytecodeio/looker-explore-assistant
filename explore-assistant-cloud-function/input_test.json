@@ -1,0 +1,17 @@
+{
+    "prompt": "please let me know who was in the office yesterday",
+    "standard_fields": {
+    "active": "Active - Status, Status, Active or not",
+    "title": "Job Title",
+    "department": "Department",
+    "employee_type": "Employee Type",
+    "seating_need_id": "Seating Need",
+    "assigned_site_id": "Assigned Site",
+    "home_office": "Home Office",
+    "work_location": "Work Location",
+    "division": "Division",
+    "company": "Company",
+    "building": "Building",
+    "team": "Team",
+    "cost_center": "Cost Center"} 
+}
