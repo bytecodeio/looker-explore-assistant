@@ -1,6 +1,7 @@
 import logging
 from typing import Dict, List, Any
 from looker_sdk import error as looker_error
+from utils.looker_sdk_utils import init_looker_sdk
 
 logger = logging.getLogger(__name__)
 
@@ -58,17 +59,23 @@ def filter_value_fetcher_node(state: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Updated state with filter values
     """
+    # Use SDK from state if available, otherwise initialize it
+    if "looker_sdk" in state and state["looker_sdk"]:
+        sdk = state["looker_sdk"]
+        logging.debug("Using Looker SDK from state for filter value fetching")
+    else:
+        logging.warning("Missing looker_sdk in state - initializing new SDK")
+        try:
+            sdk = init_looker_sdk()
+        except Exception as e:
+            logging.error(f"Failed to initialize Looker SDK: {e}")
+            return state  # Return state unchanged if SDK initialization fails
+    
     # Check for required keys but don't fail if they're missing
     if not all(key in state for key in ["explore_params", "semantic_model"]):
         logger.warning("Missing explore_params or semantic_model in state - skipping filter value fetching")
         return state
     
-    # Check for Looker SDK specifically
-    sdk = state.get("looker_sdk")
-    if not sdk:
-        logger.warning("Missing looker_sdk in state - skipping filter value fetching")
-        return state
-        
     explore_params = state.get("explore_params", {})
     semantic_model = state.get("semantic_model", {})
     
@@ -98,5 +105,6 @@ def filter_value_fetcher_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # Update state with fetched filter values
     return {
         **state,
-        "filter_values": filter_values
+        "filter_values": filter_values,
+        "looker_sdk": sdk
     }

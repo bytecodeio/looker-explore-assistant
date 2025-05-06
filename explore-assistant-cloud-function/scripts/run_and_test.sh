@@ -18,7 +18,7 @@ sleep 5
 
 # Run test with input_test.json
 echo "Running test with input_test.json..."
-./local_test.sh --query "Show me who was in the office yesterday" --verbose
+../scripts/local_test.sh --query "Show me who was in the office yesterday" --verbose
 
 # Ask user if they want to keep the server running
 read -p "Keep the server running? (y/n) " -n 1 -r

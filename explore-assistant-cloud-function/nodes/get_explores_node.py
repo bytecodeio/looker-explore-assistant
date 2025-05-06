@@ -42,15 +42,30 @@ def get_explores_node(state: Dict) -> Dict:
     # Create BigQuery client
     client = bigquery.Client(project=project_id)
     
+    # Initialize Looker SDK
+    sdk = init_looker_sdk()
+    
     if check_table_data(client, project_id, dataset_id, table_id):
         logging.info("Table contains data. Transitioning to fetch_and_return_data node.")
-        return {"transition_to": "fetch_and_return_data"}
+        # Add SDK to state
+        return {"transition_to": "fetch_and_return_data", "looker_sdk": sdk}
     
-    sdk = init_looker_sdk()
     explores = fetch_explores(sdk)
     if not explores:
         logging.error("No explores found.")
-    # filter to only explores in the model "popular_names"
+        # Add SDK to state even if no explores found
+        return {"explores": [], "current_explore_index": 0, "processed_explores": set(), 
+                "user_query": state.get("user_query", ""), "looker_sdk": sdk}
+                
+    # Filter to only explores in the model "popular_names"
     explores = [explore for explore in explores if explore['model_name'] == "popular_names"]
     logging.info(f"Filtered explores: {explores}")
-    return {"explores": explores[:10], "current_explore_index": 0, "processed_explores": set(), "user_query": state.get("user_query", "")}  # Initialize user_query
+    
+    # Add SDK to state
+    return {
+        "explores": explores[:10], 
+        "current_explore_index": 0, 
+        "processed_explores": set(), 
+        "user_query": state.get("user_query", ""),
+        "looker_sdk": sdk
+    }

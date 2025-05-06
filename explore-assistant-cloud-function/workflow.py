@@ -25,9 +25,13 @@ from nodes.example_storage_node import example_storage_node
 
 # Import utils
 from utils.model_manager import ModelManager
+from utils.tracing_utils import trace_step, log_step
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Check if LangSmith tracing is enabled
+LANGSMITH_TRACING_ENABLED = os.environ.get("LANGSMITH_API_KEY") is not None
 
 class LookerExploreWorkflow(Chain, BaseModel):
     """
@@ -267,14 +271,25 @@ class LookerExploreWorkflow(Chain, BaseModel):
             # Compile final response
             content_messages = [msg.content for msg in state.get("messages", []) if hasattr(msg, "content")]
             text_response = "\n\n".join(content_messages[:-1] if len(content_messages) > 1 else content_messages)
-                
+            
+            # Check for explore_url and ensure it's included in the response
+            from utils.response_utils import ensure_complete_response
+            state = ensure_complete_response(state)
+            
+            # Get final response after ensuring it's complete
+            final_messages = [msg.content for msg in state.get("messages", []) if hasattr(msg, "content")]
+            complete_response = "\n\n".join(final_messages)
+
+            logging.info({
+    
+                "looker_url": state.get("explore_url", ""),
+                "summary": complete_response,
+                "looker_url_parts": state.get("looker_url_parts", {})
+            }) 
             # Return response with all required fields
             return {
-                "response": text_response,
-                "explore_url": state.get("explore_url", ""),
-                "visualization_data": state.get("visualization_data", None),
                 "looker_url": state.get("explore_url", ""),
-                "summary": text_response,
+                "summary": complete_response,
                 "looker_url_parts": state.get("looker_url_parts", {})
             }
             
@@ -288,3 +303,38 @@ class LookerExploreWorkflow(Chain, BaseModel):
                 "summary": f"An error occurred while processing your request: {str(e)}",
                 "looker_url_parts": {}
             }
+
+    def invoke(self, inputs):
+        """Execute the workflow with the given inputs"""
+        run_id = None
+        if LANGSMITH_TRACING_ENABLED:
+            from utils.tracing_utils import create_run
+            run_id = create_run("LookerExploreWorkflow", inputs)
+            
+        log_step("workflow_invoke", "Starting workflow execution", inputs=inputs)
+        
+        try:
+            # Use the existing _call method instead of manually iterating through steps
+            if LANGSMITH_TRACING_ENABLED:
+                trace_step("workflow_execute_start", {"input": inputs}, run_id=run_id)
+                
+            # Call the main workflow implementation and wait for complete results
+            result = self._call(inputs)
+            
+            # Ensure we have complete results before returning
+            import time
+            time.sleep(0.5)  # Small wait to ensure all data is processed
+            
+            if LANGSMITH_TRACING_ENABLED:
+                trace_step("workflow_execute_complete", {"result_keys": list(result.keys())}, run_id=run_id)
+            
+            log_step("workflow_complete", "Workflow execution completed with complete response")
+            return result
+            
+        except Exception as e:
+            log_step("workflow_error", f"Workflow execution failed: {str(e)}")
+            if LANGSMITH_TRACING_ENABLED:
+                trace_step("workflow_error", {"error": str(e)}, run_id=run_id, is_error=True)
+            import traceback
+            logger.error(f"Workflow error: {traceback.format_exc()}")
+            raise

@@ -109,7 +109,7 @@ def summarize_data(llm, result_data: str) -> str:
     """
     
     try:
-        summary = llm.predict(contents)
+        summary = llm.invoke(contents)
         
         # Further refine the summary
         refinement_prompt = f"""
@@ -125,7 +125,7 @@ def summarize_data(llm, result_data: str) -> str:
         Format your response as proper Markdown. Include data values where relevant.
         """
         
-        refined_summary = llm.predict(refinement_prompt)
+        refined_summary = llm.invoke(refinement_prompt)
         return refined_summary
         
     except Exception as e:
@@ -297,7 +297,7 @@ def generate_response_summary(llm, user_query: str, explore_params: Dict[str, An
         """
         
         # Generate summary
-        summary = llm.predict(prompt)
+        summary = llm.invoke(prompt)
         return summary
     except Exception as e:
         logger.error(f"Error generating response summary: {e}")
@@ -380,7 +380,7 @@ def execute_explore_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # Try to get the SDK from state or initialize it
     sdk = state.get("looker_sdk")
     if not sdk:
-        logger.warning("Missing looker_sdk in state - trying to initialize")
+        logging.warning("Missing looker_sdk in state - trying to initialize")
         try:
             sdk = init_looker_sdk()
             # Test connection

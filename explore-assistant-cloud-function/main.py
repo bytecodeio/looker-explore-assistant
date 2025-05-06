@@ -32,6 +32,10 @@ import logging
 import json
 from google.cloud import bigquery
 
+# Add LangSmith imports and setup at the top of the file
+import os
+from typing import Dict, Any, Optional
+
 # Setup SSL verification based on environment variable
 verify_ssl = os.environ.get('LOOKERSDK_VERIFY_SSL', 'true').lower()
 verify_ssl = verify_ssl == 'true' or verify_ssl == '1'
@@ -69,6 +73,27 @@ vertexai.init(project=project, location=location)
 # Initialize BigQuery client
 bq_client = bigquery.Client(project=project)
 
+# Add LangSmith setup
+LANGSMITH_API_KEY = os.environ.get("LANGSMITH_API_KEY")
+LANGSMITH_PROJECT = os.environ.get("LANGSMITH_PROJECT", "looker-explore-assistant")
+LANGSMITH_TRACING_ENABLED = LANGSMITH_API_KEY is not None
+
+if LANGSMITH_TRACING_ENABLED:
+    try:
+        import langsmith
+        from langsmith import Client
+        from langchain_core.tracers.langchain import LangChainTracer
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGCHAIN_PROJECT"] = LANGSMITH_PROJECT
+        logging.info(f"LangSmith tracing enabled with project: {LANGSMITH_PROJECT}")
+        langchain_tracer = LangChainTracer(project_name=LANGSMITH_PROJECT)
+    except ImportError:
+        logging.warning("LangSmith packages not installed. Will continue without tracing.")
+        LANGSMITH_TRACING_ENABLED = False
+        langchain_tracer = None
+else:
+    langchain_tracer = None
+
 # Function to check if a table exists in BigQuery
 def check_table_exists(project_id, dataset_id, table_id):
     """Check if a table exists in BigQuery"""
@@ -104,8 +129,10 @@ def generate_looker_query(contents, parameters=None, model_name="gemini-2.0-flas
 
     # Ensure explores table exists and has data
     try:
-        from utils.bigquery_utils import ensure_table_exists, populate_explores_from_looker
+        from utils.bigquery_utils import ensure_table_exists
         from utils.looker_sdk_utils import init_looker_sdk
+        from utils.looker_history_utils import populate_explores_from_history
+        from utils.model_manager import ModelManager
 
         # Check and create explores table if needed
         project_id = os.environ.get("PROJECT")
@@ -114,6 +141,9 @@ def generate_looker_query(contents, parameters=None, model_name="gemini-2.0-flas
         
         client = bigquery.Client(project=project_id)
         sdk = init_looker_sdk()
+        
+        # Initialize ModelManager for LLM access
+        model_mgr = ModelManager(model_name=model_name or os.environ.get("MODEL_NAME", "gemini-2.0-flash-lite"))
         
         # Ensure dataset and table exist
         ensure_table_exists(client, project_id, dataset_id, table_id, "explores")
@@ -125,8 +155,8 @@ def generate_looker_query(contents, parameters=None, model_name="gemini-2.0-flas
             result = query_job.result()
             count = [row['count'] for row in result][0]
             if count == 0:
-                logging.info("Explores table exists but is empty, populating from Looker")
-                populate_explores_from_looker(client, project_id, dataset_id, sdk)
+                logging.info("Explores table exists but is empty, populating from Looker history")
+                populate_explores_from_history(client, project_id, dataset_id, table_id, sdk, model_mgr)
         except Exception as e:
             logging.error(f"Error checking or populating explores table: {e}")
     except Exception as e:
@@ -143,14 +173,28 @@ def generate_looker_query(contents, parameters=None, model_name="gemini-2.0-flas
     try:
         from workflow import LookerExploreWorkflow
         from utils.model_manager import ModelManager
+        from utils.tracing_utils import trace_step, create_run
         logging.debug("WORKFLOW STEP 3: Successfully imported workflow modules")
         
+        # Create a trace run for this request
+        if LANGSMITH_TRACING_ENABLED:
+            run_id = create_run(
+                name="generate_looker_query",
+                inputs={"contents": contents, "parameters": parameters, "standard_fields": standard_fields}
+            )
+            trace_step("workflow_start", f"Starting workflow with query: {contents[:50]}...")
+        else:
+            run_id = None
+            
         # Initialize ModelManager with model_name from environment or parameter
         model_manager = ModelManager(model_name=model_name or os.environ.get("MODEL_NAME", "gemini-2.0-flash-lite"))
         logging.debug(f"WORKFLOW STEP 4: Initialized ModelManager with model: {model_name}")
         
         # Create workflow instance - it will use environment variables for Looker connection
         workflow = LookerExploreWorkflow(model_manager=model_manager)
+        if LANGSMITH_TRACING_ENABLED:
+            trace_step("workflow_instance_created", {"looker_url": workflow.looker_instance_url}, run_id=run_id)
+        
         logging.debug("WORKFLOW STEP 5: Created LookerExploreWorkflow instance")
         logging.debug(f"WORKFLOW STEP 5: Using Looker URL: {workflow.looker_instance_url}")
         
@@ -170,6 +214,33 @@ def generate_looker_query(contents, parameters=None, model_name="gemini-2.0-flas
         # Call the workflow
         result = workflow.invoke(workflow_input)
         logging.debug(f"WORKFLOW STEP 8: Workflow execution completed with result keys: {list(result.keys())}")
+        
+        # Check for complete response
+        if not result.get("response") and result.get("messages"):
+            # Build response from messages if response field is missing
+            messages_text = "\n\n".join([msg.content for msg in result.get("messages", [])])
+            
+            # Check if we have query results but they're not included in the messages
+            if result.get("query_results") and "query_results" not in messages_text.lower():
+                result_summary = "\n\n**Query Results:**\n"
+                results = result.get("query_results", [])
+                
+                # Add a summary of the results
+                if results:
+                    result_summary += f"Found {len(results)} records.\n\n"
+                    # Include first few records as examples
+                    max_records = min(5, len(results))
+                    for i in range(max_records):
+                        result_summary += f"Record {i+1}: {str(results[i])}\n"
+                    
+                    if "explore_url" in result:
+                        result_summary += f"\n\nExplore URL: {result.get('explore_url')}"
+                        
+                    # Add results to the final response
+                    messages_text += result_summary
+            
+            result["response"] = messages_text
+            logging.info("Built complete response from message history")
         
         # Return the response text
         return result.get("response", "No response generated")

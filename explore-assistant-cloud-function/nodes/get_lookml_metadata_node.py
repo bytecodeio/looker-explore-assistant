@@ -1,28 +1,8 @@
 import logging
 import os
-import ssl
 from typing import Dict
-from looker_sdk import init40, error
-
-# Import the centralized SDK initialization function
+from looker_sdk import error
 from utils.looker_sdk_utils import init_looker_sdk
-
-def init_looker_sdk():
-    """Initialize Looker SDK with proper certificate handling"""
-    # Get SSL verification setting from environment with proper boolean conversion
-    verify_ssl = os.environ.get('LOOKERSDK_VERIFY_SSL', 'true').lower()
-    verify_ssl = verify_ssl == 'true' or verify_ssl == '1'
-    
-    if not verify_ssl:
-        # Suppress certificate warnings if verification is disabled
-        import urllib3
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        logging.info("SSL certificate verification disabled")
-    
-    # Initialize the SDK with the environment variables
-    sdk = init40()
-    logging.debug("Looker SDK initialized successfully")
-    return sdk
 
 def fetch_lookml_metadata(sdk, model, explore_name):
     try:
@@ -37,7 +17,14 @@ def get_lookml_metadata_node(state: Dict) -> Dict:
         logging.error("Explores list is empty in get_lookml_metadata_node.")
         return state  # Return state as is if explores list is empty
     
-    sdk = init_looker_sdk()
+    # Use SDK from state if available, otherwise initialize it
+    if "looker_sdk" in state and state["looker_sdk"]:
+        sdk = state["looker_sdk"]
+        logging.debug("Using Looker SDK from state")
+    else:
+        logging.debug("Initializing Looker SDK in get_lookml_metadata_node")
+        sdk = init_looker_sdk()
+    
     while state["current_explore_index"] < len(state["explores"]):
         explore = state["explores"][state["current_explore_index"]]
         model = explore['model_name']  # Use 'model_name' from dictionary
@@ -52,4 +39,12 @@ def get_lookml_metadata_node(state: Dict) -> Dict:
             state["current_explore_index"] += 1
             continue  # Skip to the next explore
         state["current_explore_index"] += 1
-    return {"metadata": state["metadata"], "explores": state["explores"], "current_explore_index": state["current_explore_index"], "processed_explores": state["processed_explores"]}  # Ensure explores is returned
+    
+    # Add or keep SDK in state
+    return {
+        "metadata": state.get("metadata", {}), 
+        "explores": state["explores"], 
+        "current_explore_index": state["current_explore_index"], 
+        "processed_explores": state["processed_explores"],
+        "looker_sdk": sdk
+    }

@@ -75,26 +75,59 @@ def send_request(url: str, payload: Dict[str, Any], verbose: bool = False) -> No
         'Content-Type': 'application/json'
     }
     
-    logger.info(f"Sending request to {url}")
+    # Get timeout from global args
+    timeout = getattr(args, 'timeout', 60)
+    
+    logger.info(f"Sending request to {url} (timeout: {timeout}s)")
     if verbose:
         logger.debug(f"Headers: {headers}")
         logger.debug(f"Payload: {json.dumps(payload, indent=2)}")
     
     try:
         start_time = time.time()
-        response = requests.post(url, headers=headers, json=payload)
+        # Use stream=True to handle streaming responses with a longer timeout
+        response = requests.post(url, headers=headers, json=payload, stream=True, timeout=timeout)
         elapsed_time = time.time() - start_time
         
         # Print response headers for debugging
         if verbose:
             logger.debug(f"Response headers: {response.headers}")
         logger.info(f"Response status code: {response.status_code}")
-        logger.info(f"Request took {elapsed_time:.2f} seconds")
+        logger.info(f"Initial request took {elapsed_time:.2f} seconds")
         
         # Print response content
         logger.info("Response content:")
         if response.status_code == 200:
-            print(response.text)
+            # Handle streaming response
+            full_response = ""
+            last_update = time.time()
+            
+            for chunk in response.iter_content(chunk_size=4096, decode_unicode=True):
+                if chunk:
+                    chunk_text = chunk.decode('utf-8') if isinstance(chunk, bytes) else chunk
+                    full_response += chunk_text
+                    # Print each chunk as it arrives
+                    print(chunk_text, end='', flush=True)
+                    last_update = time.time()
+                
+                # Check if we've gone too long without a chunk
+                if time.time() - last_update > 5:  # 5 seconds without updates
+                    if verbose:
+                        logger.debug("No new content for 5 seconds, checking if connection is still alive")
+                    # Could add a keep-alive mechanism here if needed
+            
+            total_time = time.time() - start_time
+            print(f"\n\nComplete response received. Total time: {total_time:.2f} seconds", flush=True)
+            
+            # If verbose, also log the full response length
+            if verbose:
+                logger.debug(f"Total response length: {len(full_response)} characters")
+                
+            # Save to output file if specified
+            if hasattr(args, 'output') and args.output:
+                with open(args.output, 'w') as f:
+                    f.write(full_response)
+                logger.info(f"Response saved to {args.output}")
         else:
             logger.error(f"Error response: {response.text}")
         
@@ -121,7 +154,10 @@ def main():
                         help='Enable verbose logging')
     parser.add_argument('--output', type=str, 
                         help='Save response to this file')
+    parser.add_argument('--timeout', type=int, default=60,
+                        help='Request timeout in seconds')
     
+    global args
     args = parser.parse_args()
     
     if args.verbose:
@@ -173,10 +209,6 @@ def main():
     
     # Send the request
     send_request(args.url, payload, args.verbose)
-    
-    # Save response to file if specified
-    if args.output:
-        pass  # Implement saving response to file if needed
 
 if __name__ == "__main__":
     main()

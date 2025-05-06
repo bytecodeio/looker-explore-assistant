@@ -98,3 +98,42 @@ def validate_output_format(state: Dict[str, Any], required_fields: Optional[Dict
         logging.warning("Missing 'messages' field in state - adding empty list")
     
     return state
+
+def ensure_complete_response(state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Ensures that the state contains a complete response including explore URL
+    and query results if they exist but aren't in the messages.
+    
+    Args:
+        state: The current workflow state
+        
+    Returns:
+        Updated state with complete response
+    """
+    # Skip if there are no messages
+    if "messages" not in state or not state["messages"]:
+        return state
+        
+    # Check if explore URL exists but isn't in the last message
+    last_message_content = state["messages"][-1].content if state["messages"] else ""
+    
+    if state.get("explore_url") and state["explore_url"] not in last_message_content:
+        # Add explore URL to the response
+        updated_message = last_message_content + f"\n\nExplore URL: {state['explore_url']}"
+        state["messages"][-1] = AIMessage(content=updated_message)
+    
+    # Check if query results exist but aren't mentioned
+    if state.get("query_results") and "query results" not in last_message_content.lower():
+        # Add a summary of results to the response
+        result_count = len(state["query_results"])
+        result_summary = f"\n\nQuery found {result_count} results."
+        
+        # If there are results, add a sample
+        if result_count > 0:
+            sample_size = min(3, result_count)
+            result_summary += f" Here's a sample: {state['query_results'][:sample_size]}"
+            
+        updated_message = state["messages"][-1].content + result_summary
+        state["messages"][-1] = AIMessage(content=updated_message)
+    
+    return state

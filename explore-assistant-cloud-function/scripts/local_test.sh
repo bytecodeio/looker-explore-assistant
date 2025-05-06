@@ -6,6 +6,7 @@ LOCAL_URL="http://localhost:8000/"
 QUERY="Who was in the office last week and what was utilization like?"
 STANDARD_FIELDS_FILE="input_test.json"
 VERBOSE=""
+TIMEOUT=120
 
 # Display usage information
 function show_usage {
@@ -15,6 +16,7 @@ function show_usage {
   echo "  --query QUERY               Query to send to the server"
   echo "  --standard-fields-file FILE JSON file containing standard fields (default: input_test.json)"
   echo "  --verbose                   Enable verbose logging"
+  echo "  --timeout SECONDS           Request timeout in seconds (default: 120)"
   echo "  --help                      Show this help message"
 }
 
@@ -25,6 +27,7 @@ while [[ "$#" -gt 0 ]]; do
     --query) QUERY="$2"; shift ;;
     --standard-fields-file) STANDARD_FIELDS_FILE="$2"; shift ;;
     --verbose) VERBOSE="--verbose" ;;
+    --timeout) TIMEOUT="$2"; shift ;;
     --help) show_usage; exit 0 ;;
     *) echo "Unknown parameter: $1"; show_usage; exit 1 ;;
   esac
@@ -35,7 +38,8 @@ echo "Testing Looker Explore Assistant locally..."
 echo "URL: $LOCAL_URL"
 echo "Query: $QUERY"
 echo "Standard Fields File: $STANDARD_FIELDS_FILE"
+echo "Timeout: ${TIMEOUT}s"
 
 # Run the test
 python test_local.py --url "$LOCAL_URL" --query "$QUERY" \
-  --standard-fields-file "$STANDARD_FIELDS_FILE" $VERBOSE
+  --standard-fields-file "$STANDARD_FIELDS_FILE" --timeout "$TIMEOUT" $VERBOSE

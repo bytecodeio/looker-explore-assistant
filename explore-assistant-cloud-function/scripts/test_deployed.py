@@ -316,6 +316,7 @@ def main():
             if args.verbose or args.debug:
                 print("\nResponse is not JSON. Content appears to be plain text.")
             
+            
     except requests.exceptions.RequestException as e:
         print("\n" + "="*60)
         print(" ERROR")

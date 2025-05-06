@@ -68,7 +68,7 @@ def regenerate_explore_params(
     """
     
     try:
-        response = llm.predict(prompt)
+        response = llm.invoke(prompt)
         
         # Clean up the response to extract just the JSON
         response = response.strip()

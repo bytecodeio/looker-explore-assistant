@@ -125,7 +125,7 @@ class QueryAnalyzer:
         """
         
         try:
-            response = llm.predict(prompt)
+            response = llm.invoke(prompt)
             import json
             return json.loads(response)
         except Exception as e:

@@ -41,7 +41,7 @@ def analyze_feedback(llm: BaseLLM, user_feedback: str, original_query: str) -> D
     """
     
     try:
-        response = llm.predict(prompt)
+        response = llm.invoke(prompt)
         return json.loads(response)
     except Exception as e:
         logging.error(f"Error analyzing feedback: {e}")

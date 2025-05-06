@@ -222,7 +222,7 @@ def generate_filter_params_with_retry(
         
         try:
             # Generate filter response
-            response = llm.predict(filter_prompt)
+            response = llm.invoke(filter_prompt)
             filters = parse_json_response(response, default_value={})
             
             if not filters:
@@ -286,7 +286,7 @@ def generate_base_explore_params(llm: BaseLLM, prompt: str, shared_context: str,
     """
     
     try:
-        response = llm.predict(contents)
+        response = llm.invoke(contents)
         
         # Extract JSON from potentially markdown-formatted response
         clean_json_str = extract_json_from_response(response)
@@ -437,7 +437,7 @@ def explore_params_generator_node(state: Dict) -> Dict:
     try:
         # Get LLM response
         logging.info(f"Sending explore params generation prompt to LLM, length: {len(prompt)}")
-        response = llm.predict(prompt)
+        response = llm.invoke(prompt)
         logging.info(f"Received LLM response for explore params, length: {len(response)}")
         
         # Parse and validate JSON response using utility function
