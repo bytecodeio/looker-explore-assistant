@@ -92,6 +92,15 @@ export type ExploreThread = {
   createdAt: number
 }
 
+export interface ExploreSelection {
+  id: string
+  modelName: string
+  exploreId: string
+  userId: string
+  selectionData: any
+  createdAt: number
+  updatedAt: number
+}
 
 export interface SemanticModel {
   dimensions: Field[]
@@ -131,6 +140,7 @@ export interface AssistantState {
   bigQueryTestSuccessful: boolean
   vertexTestSuccessful: boolean
   showConnectionBanner: boolean,
+  exploreSelections: ExploreSelection[]
 }
 
 export const newThreadState = () => {
@@ -218,6 +228,7 @@ export const initialState: AssistantState = {
   bigQueryTestSuccessful: false,
   vertexTestSuccessful: false,
   showConnectionBanner: true,
+  exploreSelections: []
 }
 
 export const assistantSlice = createSlice({
@@ -378,6 +389,25 @@ export const assistantSlice = createSlice({
     setShowConnectionBanner: (state, action: PayloadAction<boolean>) => {
       state.showConnectionBanner = action.payload
     },
+    setExploreSelections: (state, action: PayloadAction<ExploreSelection[]>) => {
+      state.exploreSelections = action.payload
+    },
+    addExploreSelection: (state, action: PayloadAction<ExploreSelection>) => {
+      state.exploreSelections.push(action.payload)
+    },
+    updateExploreSelection: (state, action: PayloadAction<ExploreSelection>) => {
+      const index = state.exploreSelections.findIndex(
+        selection => selection.id === action.payload.id
+      )
+      if (index !== -1) {
+        state.exploreSelections[index] = action.payload
+      }
+    },
+    removeExploreSelection: (state, action: PayloadAction<string>) => {
+      state.exploreSelections = state.exploreSelections.filter(
+        selection => selection.id !== action.payload
+      )
+    }
   },
 })
 
@@ -419,6 +449,10 @@ export const {
   setBigQueryTestSuccessful,
   setVertexTestSuccessful,
   setShowConnectionBanner,
+  setExploreSelections,
+  addExploreSelection,
+  updateExploreSelection,
+  removeExploreSelection,
 } = assistantSlice.actions
 
 export default assistantSlice.reducer
