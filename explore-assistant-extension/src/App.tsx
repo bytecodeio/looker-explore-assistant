@@ -7,15 +7,18 @@ import { useLookerFields } from './hooks/useLookerFields'
 import { useBigQueryExamples } from './hooks/useBigQueryExamples'
 import useSendVertexMessage from './hooks/useSendVertexMessage'
 import { useAutoOAuth } from './hooks/useAutoOAuth'
+import { TableInitializer } from './components/Setup/TableInitializer'
 import AgentPage from './pages/AgentPage'
 import SettingsModal from './pages/AgentPage/Settings'
-import ConnectionBanner from './components/Banner/ConnectionBanner'  // Import the new banner
+import ConnectionBanner from './components/Banner/ConnectionBanner'
 import { Box, CircularProgress, Typography } from '@material-ui/core'
 
 const ExploreApp = () => {
   const dispatch = useDispatch()
   const { settings, bigQueryTestSuccessful, vertexTestSuccessful } = useSelector((state: RootState) => state.assistant) as any
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isTableInitialized, setIsTableInitialized] = useState(false)
+  const [showTableInitializer, setShowTableInitializer] = useState(false)
   
   // Skip auto OAuth if settings modal is open
   const { isAuthenticating } = useAutoOAuth(isSettingsOpen)
@@ -50,8 +53,16 @@ const ExploreApp = () => {
 
     if (!bigQueryTestSuccessful || !vertexTestSuccessful) {
       runTests();
+    } else if (bigQueryTestSuccessful && vertexTestSuccessful && !isTableInitialized && !showTableInitializer) {
+      // Once settings are confirmed working, show the table initializer
+      setShowTableInitializer(true);
     }
-  }, [testBigQuerySettings, testVertexSettings, bigQueryTestSuccessful, vertexTestSuccessful, settings]);
+  }, [testBigQuerySettings, testVertexSettings, bigQueryTestSuccessful, vertexTestSuccessful, settings, isTableInitialized, showTableInitializer]);
+
+  const handleTablesInitialized = () => {
+    setIsTableInitialized(true);
+    setShowTableInitializer(false);
+  };
 
   if (isAuthenticating) {
     return (
@@ -74,15 +85,21 @@ const ExploreApp = () => {
       />
       { bigQueryTestSuccessful && vertexTestSuccessful && (
         <>
-          <ConnectionBanner initialVisible={bannerInitialState} />
-          <Switch>
-            <Route path="/index" exact>
-              <AgentPage />
-            </Route>
-            <Route>
-              <Redirect to="/index" />
-            </Route>
-          </Switch>
+          {showTableInitializer ? (
+            <TableInitializer onInitialized={handleTablesInitialized} />
+          ) : isTableInitialized && (
+            <>
+              <ConnectionBanner initialVisible={bannerInitialState} />
+              <Switch>
+                <Route path="/index" exact>
+                  <AgentPage />
+                </Route>
+                <Route>
+                  <Redirect to="/index" />
+                </Route>
+              </Switch>
+            </>
+          )}
         </>
       )}
     </>

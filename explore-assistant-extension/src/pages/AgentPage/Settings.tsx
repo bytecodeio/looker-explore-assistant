@@ -12,6 +12,8 @@ import { useBigQueryExamples } from '../../hooks/useBigQueryExamples'
 import useSendVertexMessage from '../../hooks/useSendVertexMessage'
 import InfoIcon from '@mui/icons-material/Info'
 import { useAutoOAuth } from '../../hooks/useAutoOAuth'
+import { TableSetup } from '../../components/Setup/TableSetup'
+import { CircularProgress, Snackbar, Alert } from '@mui/material'
 
 interface SettingsModalProps {
   open: boolean
@@ -32,6 +34,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
   const [expandedSetting, setExpandedSetting] = useState<string | null>(null)
   const [bigQueryTestResult, setBigQueryTestResult] = useState<boolean | null>(null)
   const [vertexTestResult, setVertexTestResult] = useState<boolean | null>(null)
+  const [showTableSetup, setShowTableSetup] = useState<boolean>(false)
 
   const { testBigQuerySettings } = useBigQueryExamples()
   const { testVertexSettings } = useSendVertexMessage()
@@ -142,8 +145,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     }
   }
 
-  // No longer automatically running OAuth on component mount
-
   // Load user attributes and their values when the modal opens
   useEffect(() => {
     const fetchUserAttributes = async () => {
@@ -185,6 +186,30 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     }
     checkAdminStatus()
   }, [core40SDK]);
+
+  const [notification, setNotification] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    open: false,
+    message: '',
+    severity: 'info'
+  })
+
+  // Handle table setup initialization completion
+  const handleTableInitialized = () => {
+    setNotification({
+      open: true,
+      message: 'Tables successfully initialized and populated',
+      severity: 'success'
+    })
+  }
+
+  // Close notification
+  const handleCloseNotification = () => {
+    setNotification(prev => ({ ...prev, open: false }))
+  }
 
   if (!isAdmin) return null;
 
@@ -267,6 +292,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     }, 100)
   }
 
+  // Toggle table setup visibility
+  const toggleTableSetup = () => {
+    setShowTableSetup(!showTableSetup);
+  }
+
   // Handle expanding settings description
   const handleExpandClick = (id: string) => {
     setExpandedSetting(expandedSetting === id ? null : id)
@@ -346,7 +376,30 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
             </li>
           ))}
         </ul>
-        <div className={styles.modalContent}>
+        
+        {/* Tables Configuration Section */}
+        <div className={styles.sectionContainer}>
+          <Typography variant="h6" className={styles.sectionTitle}>
+            Explore Tables Configuration
+          </Typography>
+          
+          <Button 
+            variant="contained" 
+            color="primary" 
+            onClick={toggleTableSetup}
+            style={{ marginBottom: '15px' }}
+          >
+            {showTableSetup ? 'Hide Table Configuration' : 'Configure Explore Tables'}
+          </Button>
+          
+          {showTableSetup && (
+            <div className={styles.tableConfigContainer}>
+              <TableSetup onInitialized={handleTableInitialized} />
+            </div>
+          )}
+        </div>
+        
+        <div className={styles.statusContainer}>
           <Typography variant="body2">
             OAuth Status: {settings['oauth2_token']?.value ? <span className={styles.passed}>Authenticated</span> : <span className={styles.failed}>Not Authenticated</span>}
           </Typography>
@@ -357,10 +410,131 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
             Vertex AI Test: {vertexTestResult === null ? 'Testing...' : vertexTestResult ? <span className={styles.passed}>Passed</span> : <span className={styles.failed}>Failed</span>}
           </Typography>
         </div>
-        <button onClick={handleTestAndSave} className={styles.button}>Test</button>
-        <button onClick={handleReset} className={`${styles.button} ${styles.resetButton}`}>Reset All Settings</button>
+        
+        <div className={styles.actionsContainer}>
+          <button onClick={handleTestAndSave} className={styles.button}>Test</button>
+          <button onClick={handleReset} className={`${styles.button} ${styles.resetButton}`}>Reset All Settings</button>
+        </div>
+      
+        {/* Add notification snackbar */}
+        <Snackbar 
+          open={notification.open} 
+          autoHideDuration={6000} 
+          onClose={handleCloseNotification}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <Alert 
+            onClose={handleCloseNotification} 
+            severity={notification.severity}
+            variant="filled"
+          >
+            {notification.message}
+          </Alert>
+        </Snackbar>
       </Box>
     </Modal>
   )
 }
+
 export default SettingsModal
+
+// Add CSS styles for the new components
+const styles = {
+  modalContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000
+  },
+  modalBox: {
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.15)',
+    padding: '32px',
+    maxWidth: '800px',
+    width: '100%',
+    maxHeight: '90vh',
+    overflow: 'auto',
+    position: 'relative'
+  },
+  modalContent: {
+    marginTop: '16px',
+    padding: '0',
+    listStyle: 'none'
+  },
+  settingItem: {
+    marginBottom: '16px',
+    borderBottom: '1px solid #eaeaea',
+    paddingBottom: '16px'
+  },
+  button: {
+    backgroundColor: '#4285F4',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '8px 16px',
+    cursor: 'pointer',
+    marginRight: '8px',
+    fontWeight: 'bold'
+  },
+  resetButton: {
+    backgroundColor: '#DB4437'
+  },
+  collapsibleContent: {
+    maxHeight: '0',
+    overflow: 'hidden',
+    transition: 'max-height 0.3s ease-out'
+  },
+  show: {
+    maxHeight: '200px',
+    padding: '8px 0'
+  },
+  clientIdContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    marginTop: '8px'
+  },
+  inputField: {
+    padding: '8px',
+    borderRadius: '4px',
+    border: '1px solid #ccc',
+    marginRight: '8px',
+    width: '100%'
+  },
+  authButton: {
+    marginLeft: '8px'
+  },
+  passed: {
+    color: 'green',
+    fontWeight: 'bold'
+  },
+  failed: {
+    color: 'red',
+    fontWeight: 'bold'
+  },
+  sectionContainer: {
+    marginTop: '24px',
+    padding: '16px',
+    backgroundColor: '#f5f5f5',
+    borderRadius: '8px'
+  },
+  sectionTitle: {
+    marginBottom: '16px',
+    fontWeight: 'bold',
+    fontSize: '1.25rem'
+  },
+  tableConfigContainer: {
+    backgroundColor: 'white',
+    border: '1px solid #e0e0e0',
+    borderRadius: '4px'
+  },
+  statusContainer: {
+    marginTop: '24px',
+    padding: '16px 0'
+  },
+  actionsContainer: {
+    marginTop: '16px',
+    display: 'flex',
+    justifyContent: 'flex-end'
+  }
+}

@@ -9,6 +9,7 @@ import { ExploreEmbed } from '../../components/ExploreEmbed'
 import { RootState } from '../../store'
 import { useDispatch, useSelector } from 'react-redux'
 import useSendVertexMessage from '../../hooks/useSendVertexMessage'
+import { useConversationExplore } from '../../hooks/useConversationExplore'
 import {
   addMessage,
   AssistantState,
@@ -33,6 +34,7 @@ import {
   SelectChangeEvent,
   Tooltip,
 } from '@mui/material'
+import ConnectionBanner from '../../components/Banner/ConnectionBanner'
 import { getRelativeTimeString } from '../../utils/time'
 
 const toCamelCase = (input: string): string => {
@@ -54,6 +56,7 @@ const AgentPage = () => {
   const [expanded, setExpanded] = useState(false)
   const { generateExploreParams, isSummarizationPrompt, summarizePrompts } =
     useSendVertexMessage()
+  const { findAndSelectExplore, isSelectingExplore } = useConversationExplore()
 
   const {
     isChatMode,
@@ -66,6 +69,7 @@ const AgentPage = () => {
     semanticModels,
     isBigQueryMetadataLoaded,
     isSemanticModelLoaded,
+    showConnectionBanner,
   } = useSelector((state: RootState) => state.assistant as AssistantState)
 
   const explores = Object.keys(examples.exploreSamples).map((key) => {
@@ -104,24 +108,7 @@ const AgentPage = () => {
       }),
     )
 
-    const exploreKey =
-      currentExploreThread?.exploreKey || currentExplore.exploreKey
-
-    // set the explore if it is not set
-    if (!currentExploreThread?.modelName || !currentExploreThread?.exploreId) {
-      dispatch(
-        updateCurrentThread({
-          exploreId: currentExplore.exploreId,
-          modelName: currentExplore.modelName,
-          exploreKey: currentExplore.exploreKey,
-        }),
-      )
-    }
-
-    console.log('Prompt List: ', promptList)
-    console.log(currentExploreThread)
-    console.log(currentExplore)
-
+    // add the user message
     dispatch(
       addMessage({
         uuid: uuidv4(),
@@ -132,57 +119,99 @@ const AgentPage = () => {
       }),
     )
 
-    const [promptSummary, isSummary] = await Promise.all([
-      summarizePrompts(promptList),
-      isSummarizationPrompt(query),
-    ])
+    // Clear the query
+    dispatch(setQuery(''))
+    
+    // First, check if we have a selected explore - if not, find one based on the query
+    const hasExplore = currentExplore && currentExplore.exploreId && currentExplore.modelName
+    if (!hasExplore) {
+      const exploreSelected = await findAndSelectExplore(query)
+      if (!exploreSelected) {
+        // If explore selection failed, stop processing and set isQuerying to false
+        dispatch(setIsQuerying(false))
+        return
+      }
+      // Give a moment for the UI to update with explore selection messages
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
 
-    if (!promptSummary) {
+    // If the semanticModels aren't loaded yet or we don't have an explore key, stop here
+    if (!semanticModels || !currentExplore.exploreKey) {
       dispatch(setIsQuerying(false))
       return
     }
 
-    const { dimensions, measures } = semanticModels[exploreKey]
-    const exploreGenerationExamples =
-      examples.exploreGenerationExamples[exploreKey]
+    const semanticModel = semanticModels[currentExplore.exploreKey]
 
-    const newExploreParams = await generateExploreParams(
+    if (!semanticModel) {
+      console.error('No semantic model found for', currentExplore.exploreKey)
+      dispatch(setIsQuerying(false))
+      return
+    }
+
+    const dimensions = semanticModel.dimensions
+    const measures = semanticModel.measures
+    const exploreKey = currentExplore.exploreKey
+    const exploreGenerationExamples = examples.exploreGenerationExamples[exploreKey]
+
+    if (!dimensions || !measures) {
+      console.error('No dimensions or measures found in semantic model')
+      dispatch(setIsQuerying(false))
+      return
+    }
+
+    // check if the user is asking for a data summarization
+    const isDataSummary = await isSummarizationPrompt(query)
+
+    if (isDataSummary) {
+      // and the current params are populated
+      if (
+        currentExploreThread?.exploreParams &&
+        currentExploreThread?.exploreParams.fields &&
+        currentExploreThread?.exploreParams.fields.length > 0
+      ) {
+        // add a summarize type message
+        dispatch(
+          addMessage({
+            uuid: uuidv4(),
+            actor: 'system',
+            exploreParams: currentExploreThread.exploreParams,
+            createdAt: Date.now(),
+            type: 'summarize',
+            summary: '',
+          }),
+        )
+
+        // We're done!
+        dispatch(setIsQuerying(false))
+        return
+      }
+    }
+
+    // summarize using the list of prompts and potentially handle a summary request
+    const promptSummary = await summarizePrompts(promptList)
+
+    // generate query parameters from the prompt
+    const explorerParamsResponse = await generateExploreParams(
       promptSummary,
       dimensions,
       measures,
-      exploreGenerationExamples
-      
+      exploreGenerationExamples || [],
     )
-    console.log('New Explore URL: ', newExploreParams)
-    dispatch(setIsQuerying(false))
-    dispatch(setQuery(''))
 
+    // save the explore params
     dispatch(
       updateCurrentThread({
-        exploreParams: newExploreParams,
-        summarizedPrompt: promptSummary,
+        exploreParams: explorerParamsResponse,
       }),
     )
 
-    if (isSummary) {
+    // add the explorer message
+    if (explorerParamsResponse) {
       dispatch(
         addMessage({
-          exploreParams: newExploreParams,
           uuid: uuidv4(),
-          actor: 'system',
-          createdAt: Date.now(),
-          summary: '',
-          type: 'summarize',
-        }),
-      )
-    } else {
-      dispatch(setSidePanelExploreParams(newExploreParams))
-      dispatch(openSidePanel())
-
-      dispatch(
-        addMessage({
-          exploreParams: newExploreParams,
-          uuid: uuidv4(),
+          exploreParams: explorerParamsResponse,
           summarizedPrompt: promptSummary,
           actor: 'system',
           createdAt: Date.now(),
@@ -196,7 +225,15 @@ const AgentPage = () => {
 
     // update the history with the current contents of the thread
     dispatch(updateLastHistoryEntry())
-  }, [query, semanticModels, examples, currentExplore, currentExploreThread])
+    dispatch(setIsQuerying(false))
+  }, [
+    query, 
+    semanticModels, 
+    examples, 
+    currentExplore, 
+    currentExploreThread, 
+    findAndSelectExplore
+  ])
 
   const isDataLoaded = isBigQueryMetadataLoaded && isSemanticModelLoaded
 
@@ -250,53 +287,44 @@ const AgentPage = () => {
   }
 
   return (
-    <div className="relative page-container flex h-screen">
+    <div className="flex">
+      {/* Sidebar */}
       <Sidebar expanded={expanded} toggleDrawer={toggleDrawer} />
 
-      <main
-        className={`flex-grow flex flex-col transition-all duration-300 ${
-          expanded ? 'ml-80' : 'ml-16'
-        } h-screen`}
-      >
-        <div className="flex-grow">
-          {isChatMode && (
-            <div className="z-10 flex flex-row items-start text-xs fixed inset w-full h-10 pl-2 bg-gray-50 border-b border-gray-200">
-              <ol
-                role="list"
-                className="flex w-full max-w-screen-xl space-x-4 px-4 sm:px-6 lg:px-4"
-              >
-                <li className="flex">
-                  <div className="flex items-center">Explore Assistant</div>
-                </li>
-
-                <li className="flex">
-                  <div className="flex items-center h-10 ">
-                    <svg
-                      fill="currentColor"
-                      viewBox="0 0 44 44"
-                      preserveAspectRatio="none"
-                      aria-hidden="true"
-                      className="h-full w-6 flex-shrink-0 text-gray-300"
+      {/* Content */}
+      <div className="flex-1">
+        <div className={`transition-all duration-300 ease-in-out h-screen`}>
+          {/* Content area */}
+          {showConnectionBanner && <ConnectionBanner />}
+          {isBigQueryMetadataLoaded && isSemanticModelLoaded && explores.length > 0 && (
+            <div className="p-2 bg-white shadow text-gray-500 text-xs">
+              <ol className="flex items-center">
+                <li className="flex items-center">
+                  <FormControl size="small">
+                    <InputLabel>Explore</InputLabel>
+                    <Select
+                      value={currentExplore.exploreKey}
+                      onChange={handleExploreChange}
+                      label="Explore"
+                      size="small"
+                      style={{ minWidth: '200px' }}
                     >
-                      <path d="M.293 0l22 22-22 22h1.414l22-22-22-22H.293z" />
-                    </svg>
-                    <div className="ml-4 text-xs font-medium text-gray-500 hover:text-gray-700">
-                      {toCamelCase(currentExploreThread?.exploreId || '')}
-                    </div>
+                      {explores.map((explore) => (
+                        <MenuItem
+                          key={explore.exploreKey}
+                          value={explore.exploreKey}
+                        >
+                          {toCamelCase(explore.exploreId || '')}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  <div className="mx-2">
+                    <div className="w-1 h-1 bg-gray-300 rounded-full"></div>
                   </div>
-                </li>
 
-                <li className="flex">
-                  <div className="flex items-center h-10">
-                    <svg
-                      fill="currentColor"
-                      viewBox="0 0 44 44"
-                      preserveAspectRatio="none"
-                      aria-hidden="true"
-                      className="h-full w-6 flex-shrink-0 text-gray-300"
-                    >
-                      <path d="M.293 0l22 22-22 22h1.414l22-22-22-22H.293z" />
-                    </svg>
+                  <div className="flex flex-row items-center">
                     <div className="ml-4 text-xs font-medium text-gray-500 hover:text-gray-700">
                       Chat (started{' '}
                       {getRelativeTimeString(
@@ -325,91 +353,72 @@ const AgentPage = () => {
                   </div>
                 </div>
                 <div
-                  className={`absolute bottom-0 left-1/2 transform -translate-x-1/2 w-4/5  transition-all duration-300 ease-in-out`}
+                  className={`fixed bottom-0 left-0 right-0 max-w-4xl px-10 mx-auto pb-6`}
                 >
                   <PromptInput />
                 </div>
               </div>
-
-              <div
-                className={clsx(
-                  'flex-grow flex flex-col pb-2 pl-2 pt-8 transition-all duration-300 ease-in-out transform max-w-0',
-                  sidePanel.isSidePanelOpen
-                    ? 'max-w-full translate-x-0 opacity-100'
-                    : 'translate-x-full opacity-0',
-                )}
-              >
-                <div className="flex flex-row bg-gray-400 text-white rounded-t-lg px-4 py-2 text-sm">
-                  <div className="flex-grow">Explore</div>
-                  <div className="">
-                    <Tooltip title="Close Explore" placement="bottom" arrow>
+              {/* Explore side pane */}
+              {sidePanel.isSidePanelOpen && (
+                <div className="w-3/5 relative bg-white rounded-lg shadow-md ml-4 max-h-full overflow-y-auto">
+                  <div className="flex flex-wrap items-center p-2 border-b mb-2">
+                    <div className="flex-1 font-semibold">Explore</div>
+                    <div>
                       <button
                         onClick={() => dispatch(closeSidePanel())}
-                        className="text-white hover:text-gray-300"
+                        className="text-gray-500 hover:text-gray-700"
                       >
-                        <Close />
+                        <Close fontSize="small" />
                       </button>
-                    </Tooltip>
+                    </div>
+                  </div>
+                  <div className="px-2 pb-2">
+                    <ExploreEmbed
+                      exploreParams={sidePanel.exploreParams}
+                      modelName={currentExplore.modelName}
+                      exploreId={currentExplore.exploreId}
+                      height="calc(100vh - 100px)"
+                    />
                   </div>
                 </div>
-                <div className="bg-gray-200 border-l-2 border-r-2 border-gray-400 flex-grow">
-                  <ExploreEmbed
-                    modelName={currentExploreThread?.modelName}
-                    exploreId={currentExploreThread?.exploreId}
-                    exploreParams={sidePanel.exploreParams}
-                  />
-                </div>
-                <div className="bg-gray-400 text-white px-4 py-2 text-sm rounded-b-lg"></div>
-              </div>
+              )}
             </div>
           ) : (
-            <>
-              <div className="flex flex-col space-y-4 mx-auto max-w-3xl p-4">
-                <h1 className="text-5xl font-bold">
-                  <span className="bg-clip-text text-transparent  bg-gradient-to-r from-pink-500 to-violet-500">
-                    Hello.
-                  </span>
-                </h1>
-                <h1 className="text-5xl text-gray-400">
-                  How can I help you today?
-                </h1>
-              </div>
+            <div className="w-full max-w-5xl mx-auto px-8">
+              <div className="flex flex-col items-center justify-center my-auto">
+                <div className="mt-12">
+                  <h1 className="text-3xl font-light text-gray-800 mb-8 flex flex-col items-center">
+                    <div className="mb-4">
+                      Explore with
+                      <span className="font-bold mb-2 ml-2 bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-violet-500">
+                        {' '}
+                        AI
+                      </span>
+                    </div>
+                  </h1>
+                  {(!isSemanticModelLoaded || !isBigQueryMetadataLoaded) && (
+                    <>
+                      <LinearProgress />
+                      <div className="mt-4 text-center">
+                        <p className="mb-4 text-orange-600">
+                          Waiting for data to load...
+                        </p>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex flex-col items-center">
+                    <SamplePrompts />
 
-              <div className="flex flex-col max-w-3xl m-auto mt-16">
-                {explores.length > 1 && (
-                  <div className="text-md border-b-2 p-2 max-w-3xl">
-                    <FormControl className="">
-                      <InputLabel>Explore</InputLabel>
-                      <Select
-                        value={currentExplore.exploreKey}
-                        label="Explore"
-                        onChange={handleExploreChange}
-                      >
-                        {explores.map((oneExplore) => (
-                          <MenuItem
-                            key={oneExplore.exploreKey}
-                            value={oneExplore.exploreKey}
-                          >
-                            {toCamelCase(oneExplore.exploreId)}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                    <div className="mt-6 max-w-xl">
+                      <PromptInput />
+                    </div>
                   </div>
-                )}
-                <SamplePrompts />
+                </div>
               </div>
-
-              <div
-                className={`fixed bottom-0 left-1/2 transform -translate-x-1/2 w-4/5 transition-all duration-300 ease-in-out
-                            ${expanded ? 'pl-80' : ''} `}
-              >
-                <PromptInput />
-              </div>
-            </>
+            </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   )
 }
