@@ -14,3 +14,6 @@ looker.ini
 
 
 explore-assistant-backend/terraform/backend.tf
+explore-assistant-cloud-function/scripts copy/local_env.sh
+local_env.sh
+__pycache__
