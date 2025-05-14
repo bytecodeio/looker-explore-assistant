@@ -44,11 +44,21 @@ export const useLookerFields = () => {
       exploreId: string,
       exploreKey: string,
     ): Promise<SemanticModel | undefined> => {
-      if (!modelName || !exploreId) {
+      // Add more robust validation for model and explore values
+      if (!modelName || typeof modelName !== 'string' || modelName.trim() === '') {
         showBoundary({
-          message: 'Default Looker Model or Explore is blank or unspecified',
+          message: 'Default Looker Model is blank or unspecified',
+          _looker_reported: true,
         })
-        return
+        return undefined
+      }
+      
+      if (!exploreId || typeof exploreId !== 'string' || exploreId.trim() === '') {
+        showBoundary({
+          message: 'Default Looker Explore is blank or unspecified',
+          _looker_reported: true,
+        })
+        return undefined
       }
 
       try {

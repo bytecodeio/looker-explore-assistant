@@ -25,6 +25,8 @@ SOFTWARE.
 */
 
 const commonConfig = require('./webpack.config')
+const fs = require('fs')
+const path = require('path')
 
 module.exports = {
   ...commonConfig,
@@ -50,6 +52,16 @@ module.exports = {
     },
     host: 'localhost',
     allowedHosts: 'all',
+    https: true,
+    static: {
+      directory: path.join(__dirname, 'dist'),
+      publicPath: '/',
+      watch: true,
+    },
+    devMiddleware: {
+      publicPath: 'https://localhost:8080/',
+      writeToDisk: true,
+    },
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',

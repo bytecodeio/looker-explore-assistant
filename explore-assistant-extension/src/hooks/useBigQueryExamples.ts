@@ -25,10 +25,11 @@ const globalState = {
 export const useBigQueryExamples = () => {
   const dispatch = useDispatch()
   const { showBoundary } = useErrorBoundary()
-  const { isBigQueryMetadataLoaded } = useSelector((state: RootState) => state.assistant as AssistantState)
+  const { isBigQueryMetadataLoaded, settings } = useSelector((state: RootState) => state.assistant as AssistantState)
   
-  const { core40SDK, lookerHostData } = useContext(ExtensionContext)
-  const modelName = lookerHostData?.extensionId.split('::')[0]
+  const { core40SDK } = useContext(ExtensionContext)
+  // Get model name from settings instead of parsing from URL context
+  const modelName = settings?.bigquery_example_looker_model_name?.value as string || 'explore_assistant'
 
   // Use a ref to track if examples have loaded in this component instance
   const instanceHasFetched = useRef(false)
@@ -46,7 +47,7 @@ export const useBigQueryExamples = () => {
       return globalState.pendingPromise
     }
 
-    console.log('Initiating BigQuery examples query')
+    console.log('Initiating BigQuery examples query with model name:', modelName)
     // Otherwise, initiate a new query
     globalState.isFetching = true
     
@@ -56,7 +57,7 @@ export const useBigQueryExamples = () => {
           core40SDK.run_inline_query({
             result_format: 'json',
             body: {
-              model: modelName || "explore_assistant",
+              model: modelName, // Use the model name from settings
               view: "explore_assistant_examples",
               fields: [`explore_assistant_examples.explore_id`, `explore_assistant_examples.examples`, `explore_assistant_refinement_examples.examples`, `explore_assistant_samples.samples`],
             }
@@ -116,19 +117,46 @@ export const useBigQueryExamples = () => {
       dispatch(setExploreRefinementExamples(generationExamples['refinement_examples']))
       dispatch(setExploreSamples(generationExamples['samples']))
       
+      // Get the explore ID from the response
       const exploreKey: string = response[0]['explore_assistant_examples.explore_id']
-      const [modelName, exploreId] = exploreKey.split(':')
-     
-      dispatch(setCurrenExplore({
-        exploreKey: exploreKey,
-        modelName: modelName,
-        exploreId: exploreId
-      }))
+      
+      // Don't use modelName from exploreKey split - keep the one from settings
+      // Instead, only extract the exploreId portion
+      let exploreId: string
+      
+      // Check if exploreKey contains a colon (indicating it has model:explore format)
+      if (exploreKey.includes(':')) {
+        // Just extract the explore ID part after the colon
+        exploreId = exploreKey.split(':')[1]
+      } else {
+        // If there's no colon, use the whole key as the explore ID
+        exploreId = exploreKey
+      }
+      
+      // Create a new exploreKey using the model name from settings
+      const newExploreKey = `${modelName}:${exploreId}`
+      
+      console.log(`Setting current explore with model: ${modelName}, explore: ${exploreId}, key: ${newExploreKey}`)
+      
+      // Validate that both modelName and exploreId are non-empty before setting the current explore
+      if (modelName && exploreId) {
+        dispatch(setCurrenExplore({
+          exploreKey: newExploreKey,
+          modelName: modelName, // Always use the model name from settings
+          exploreId: exploreId
+        }))
+      } else {
+        console.error('Cannot set current explore: model name or explore ID is missing', { modelName, exploreId })
+        showBoundary({
+          message: 'Default Looker Model or Explore is blank or unspecified',
+          _looker_reported: true
+        })
+      }
     }).catch((error) => showBoundary(error))
   }
 
   const testBigQuerySettings = async () => {
-    console.log('Testing BigQuery settings')
+    console.log('Testing BigQuery settings with model:', modelName)
     try {
       // For testing, we want a fresh query to ensure settings are working
       const response = await runExampleQuery(true)

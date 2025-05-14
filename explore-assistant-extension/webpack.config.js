@@ -36,7 +36,7 @@ const BundleAnalyzerPlugin =
 if (!fs.existsSync('.env')) {
   fs.copyFileSync('.env_example', '.env')
 }
-env = dotenv.config().parsed
+const env = dotenv.config().parsed || {}
 if (!process.env.POSTS_SERVER_URL) {
   // webpack 5 is stricter about environment variables. The POSTS_SERVER_URL
   // environment variable was not mentioned in the README so default it for
@@ -54,7 +54,7 @@ module.exports = {
   },
   output: {
     path: __dirname + '/dist',
-    filename: 'explore_assistant.js',
+    filename: 'bundle.js',
   },
   module: {
     rules: [
