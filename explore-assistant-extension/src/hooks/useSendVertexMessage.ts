@@ -98,12 +98,11 @@ const useSendVertexMessage = () => {
   
   // Get the OAuth token from settings
   const oauth2Token = settings['oauth2_token']?.value as string || ''
+  
 
   const currentExploreKey = currentExplore.exploreKey
   const exploreRefinementExamples =
     examples.exploreRefinementExamples[currentExploreKey]
-
-  const modelName = lookerHostData?.extensionId.split('::')[0]
 
   const callVertexAPI = async (
     contents: string,
@@ -729,6 +728,19 @@ ${exploreRefinementExamples &&
       const exploreGenerationExamples = exploreData.examples || [];
       
       const sharedContext = generateSharedContext(dimensions, measures, exploreGenerationExamples) || ''
+      
+      // Try to get Data QnA insights if available for this explore
+      let dataQnAResponse = null;
+      if (DATA_QNA_BILLING_PROJECT && LOOKER_CLIENT_ID && LOOKER_CLIENT_SECRET) {
+        try {
+          const [modelName, exploreId] = exploreKey.split(':');
+          dataQnAResponse = await callDataQnAAPI(prompt, modelName, exploreId);
+          console.log('Data QnA response for explore params generation:', dataQnAResponse);
+        } catch (error) {
+          console.error('Error getting Data QnA insights:', error);
+        }
+      }
+      
       const responseJSON = await generateBaseExploreParams(prompt, sharedContext)
 
       // Directly return the responseJSON as the final response
@@ -737,12 +749,130 @@ ${exploreRefinementExamples &&
     [currentExplore, getExamplesForExplore],
   )
 
+  // Call the Data QnA API for Looker explore data
+  const callDataQnAAPI = async (
+    question: string,
+    lookmlModel: string,
+    explore: string,
+  ) => {
+    try {
+      console.log('Calling Data QnA API for Looker explore data');
+      
+      // Validate all required parameters
+      if (!oauth2Token) {
+        throw new Error('OAuth token is required but not provided for Data QnA API');
+      }
+      
+      if (!DATA_QNA_BILLING_PROJECT) {
+        console.warn('Data QnA billing project not set, skipping Data QnA API call');
+        return null;
+      }
+
+      if (!LOOKER_INSTANCE_URI) {
+        console.warn('Looker instance URI not set, skipping Data QnA API call');
+        return null;
+      }
+
+      if (!LOOKER_CLIENT_ID || !LOOKER_CLIENT_SECRET) {
+        console.warn('Looker credentials not set, skipping Data QnA API call');
+        return null;
+      }
+
+      if (!lookmlModel || !explore) {
+        console.warn('LookML model or explore not provided, skipping Data QnA API call');
+        return null;
+      }
+      
+      // Construct the Data QnA API request
+      const endpoint = `https://dataqna.googleapis.com/v1alpha1/projects/${DATA_QNA_BILLING_PROJECT}:askQuestion`;
+      
+      console.log(`Making Data QnA request to: ${endpoint}`);
+      
+      // Define system instructions for the data agent
+      const systemInstructions = "You are helping users analyze data from Looker. Be concise and accurate. Format numbers according to standard conventions. Provide detailed insights when analyzing trends.";
+      
+      // Construct request body according to Data QnA API specs (following the Python SDK structure)
+      const requestBody = {
+        // Required: Project path in the format "projects/{project}"
+        project: `projects/${DATA_QNA_BILLING_PROJECT}`,
+        // Create a message list with the user's question
+        messages: [{
+          user_message: {
+            text: question
+          }
+        }],
+        // Context with system instructions and datasource references
+        context: {
+          system_instruction: systemInstructions,
+          datasource_references: {
+            looker: {
+              explore_references: [{
+                looker_instance_uri: LOOKER_INSTANCE_URI.replace(/\/$/, ''), // Remove trailing slash if present
+                lookml_model: lookmlModel || currentExplore.modelName,
+                explore: explore || currentExplore.exploreId
+              }],
+              credentials: {
+                oauth: {
+                  secret: {
+                    client_id: LOOKER_CLIENT_ID,
+                    client_secret: LOOKER_CLIENT_SECRET
+                  }
+                }
+              }
+            }
+          }
+        }
+      };
+      
+      // Make the API call
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${oauth2Token}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Data QnA API call failed:', errorText);
+        return null;
+      }
+      
+      const responseData = await response.json();
+      console.log('Data QnA API call successful, response:', responseData);
+      
+      return responseData;
+    } catch (error) {
+      console.error('Error calling Data QnA API:', error);
+      return null;
+    }
+  };
+
   const sendMessage = async (message: string, parameters: ModelParameters) => {
     const wrappedMessage = promptWrapper(message)
     try {
       // Simplified: we only use direct Vertex AI now
       if (!oauth2Token || !VERTEX_PROJECT) {
         throw new Error('OAuth token and Vertex project ID are required');
+      }
+
+      // Check if this message might be related to a Looker explore URL
+      // Simple heuristic - look for keywords related to data exploration
+      const isExploreRelated = /\b(explore|query|data|visualization|chart|dashboard|looker|analyze|trend)\b/i.test(message);
+      
+      if (isExploreRelated && currentExplore.modelName && currentExplore.exploreId) {
+        // Asynchronously call the Data QnA API (don't await, let it run in parallel)
+        callDataQnAAPI(message, currentExplore.modelName, currentExplore.exploreId)
+          .then(qnaResponse => {
+            if (qnaResponse) {
+              console.log('Data QnA API response for explore query:', qnaResponse);
+            }
+          })
+          .catch(err => {
+            console.error('Error in parallel Data QnA API call:', err);
+          });
       }
 
       const response = await callVertexAPI(wrappedMessage, parameters);
@@ -770,6 +900,15 @@ ${exploreRefinementExamples &&
     console.log(`- Location: ${VERTEX_LOCATION || 'us-central1 (default)'}`);
     console.log(`- Model: ${VERTEX_MODEL || 'gemini-1.5-flash (default)'}`);
     
+    // Also log Data QnA API settings if configured
+    if (DATA_QNA_BILLING_PROJECT) {
+      console.log('Data QnA API settings:');
+      console.log(`- Billing Project: ${DATA_QNA_BILLING_PROJECT}`);
+      console.log(`- Looker Instance URI: ${LOOKER_INSTANCE_URI}`);
+      console.log(`- Looker Client ID: ${LOOKER_CLIENT_ID ? '[configured]' : '[missing]'}`);
+      console.log(`- Looker Client Secret: ${LOOKER_CLIENT_SECRET ? '[configured]' : '[missing]'}`);
+    }
+    
     console.log('Testing Vertex settings with minimal payload...');
     try {
       const testBody = 'test'; // Minimal test payload
@@ -779,6 +918,18 @@ ${exploreRefinementExamples &&
       
       if (response !== '') {
         dispatch(setVertexTestSuccessful(true));
+        
+        // Optionally test Data QnA API if configured
+        if (DATA_QNA_BILLING_PROJECT && LOOKER_CLIENT_ID && LOOKER_CLIENT_SECRET && LOOKER_INSTANCE_URI) {
+          try {
+            console.log('Also testing Data QnA API connection...');
+            const qnaTestResponse = await callDataQnAAPI("How many records are there?", currentExplore.modelName, currentExplore.exploreId);
+            console.log('Data QnA API test result:', qnaTestResponse ? 'OK' : 'Failed');
+          } catch (qnaError) {
+            console.error('Error testing Data QnA API:', qnaError);
+          }
+        }
+        
         return true;
       } else {
         console.error('Empty response from test');
@@ -952,6 +1103,7 @@ ${exploreContext}
     summarizeExplore,
     testVertexSettings,
     determineExplore,
+    callDataQnAAPI,  // Add the new function to the returned object
   }
 }
 

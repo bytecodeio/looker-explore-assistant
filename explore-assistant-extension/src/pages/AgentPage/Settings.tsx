@@ -1,3 +1,5 @@
+
+
 import React, { useContext, useEffect, useState } from 'react'
 import { Modal, Box, Typography, Switch, IconButton, Button } from '@mui/material'
 import { useSelector, useDispatch } from 'react-redux'
@@ -12,6 +14,8 @@ import { useBigQueryExamples } from '../../hooks/useBigQueryExamples'
 import useSendVertexMessage from '../../hooks/useSendVertexMessage'
 import InfoIcon from '@mui/icons-material/Info'
 import { useAutoOAuth } from '../../hooks/useAutoOAuth'
+import styles from '../../styles.module.css'
+
 
 interface SettingsModalProps {
   open: boolean
@@ -281,6 +285,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     id === 'google_oauth_client_id' ||
     id === 'bigquery_example_looker_model_name'
   )
+
 
   return (
     <Modal
