@@ -1,0 +1,109 @@
+[
+    {
+        "timestamp": "2025-06-06T18:26:44.663Z",
+        "systemMessage": {
+            "schema": {
+                "query": {
+                    "question": "What is the ARR for Microsoft this quarter??"
+                }
+            }
+        }
+    },
+    {
+        "timestamp": "2025-06-06T18:26:45.843Z",
+        "systemMessage": {
+            "schema": {
+                "result": {
+                    "datasources": [
+                        {
+                            "lookerExploreReference": {
+                                "lookmlModel": "sales_demo_the_look",
+                                "explore": "order_items",
+                                "lookerInstanceUri": "https://bytecodeef.looker.com"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    {
+        "timestamp": "2025-06-06T18:26:46.656Z",
+        "systemMessage": {
+            "data": {
+                "query": {
+                    "question": "What are the total sales for Microsoft this quarter?",
+                    "datasources": [
+                        {
+                            "lookerExploreReference": {
+                                "lookmlModel": "sales_demo_the_look",
+                                "explore": "order_items",
+                                "lookerInstanceUri": "https://bytecodeef.looker.com"
+                            }
+                        }
+                    ],
+                    "name": "total_sales_this_quarter"
+                }
+            }
+        }
+    },
+    {
+        "timestamp": "2025-06-06T18:26:49.250Z",
+        "systemMessage": {
+            "data": {
+                "generatedLookerQuery": {
+                    "model": "sales_demo_the_look",
+                    "explore": "order_items",
+                    "fields": [
+                        "order_items.total_sale_price"
+                    ],
+                    "filters": [
+                        {
+                            "field": "products.brand",
+                            "value": "Microsoft"
+                        },
+                        {
+                            "field": "order_items.created_quarter",
+                            "value": "this quarter"
+                        }
+                    ],
+                    "limit": "5000"
+                }
+            }
+        }
+    },
+    {
+        "timestamp": "2025-06-06T18:26:52.243Z",
+        "systemMessage": {
+            "data": {
+                "result": {
+                    "data": [
+                        {
+                            "order_items.total_sale_price": 0
+                        }
+                    ],
+                    "name": "total_sales_this_quarter",
+                    "schema": {
+                        "fields": [
+                            {
+                                "name": "order_items.total_sale_price",
+                                "type": "sum",
+                                "displayName": "Order Items Total Sale Price"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    },
+    {
+        "timestamp": "2025-06-06T18:26:52.957Z",
+        "systemMessage": {
+            "text": {
+                "parts": [
+                    "I am unable to calculate ARR. I can provide the total sales for Microsoft this quarter, which is 0. Is there anything else you need?"
+                ]
+            }
+        }
+    }
+]

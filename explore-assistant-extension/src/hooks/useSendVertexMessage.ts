@@ -6,6 +6,7 @@ import { useErrorBoundary } from 'react-error-boundary'
 import { AssistantState, setVertexTestSuccessful } from '../slices/assistantSlice'
 
 import looker_simplified_reference from '../documents/looker_simplified_reference.md'
+import looker_visualization_doc from '../documents/looker_visualization_doc.md'
 
 import { ModelParameters } from '../utils/VertexHelper'
 import { ExploreParams } from '../slices/assistantSlice'
@@ -85,7 +86,7 @@ const useSendVertexMessage = () => {
   const { showBoundary } = useErrorBoundary()
   const dispatch = useDispatch()
 
-  const { core40SDK, extensionSDK, lookerHostData } = useContext(ExtensionContext)
+  const { core40SDK, lookerHostData } = useContext(ExtensionContext)
 
   const { settings, examples, currentExplore, semanticModels } = useSelector(
     (state: RootState) => state.assistant as AssistantState,
@@ -102,8 +103,6 @@ const useSendVertexMessage = () => {
   const currentExploreKey = currentExplore.exploreKey
   const exploreRefinementExamples =
     examples.exploreRefinementExamples[currentExploreKey]
-
-  const modelName = lookerHostData?.extensionId.split('::')[0]
 
   const callVertexAPI = async (
     contents: string,
@@ -952,6 +951,7 @@ ${exploreContext}
     summarizeExplore,
     testVertexSettings,
     determineExplore,
+    generateSharedContext,
   }
 }
 

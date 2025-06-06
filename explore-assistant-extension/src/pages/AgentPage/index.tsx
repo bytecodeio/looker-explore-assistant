@@ -9,6 +9,7 @@ import { ExploreEmbed } from '../../components/ExploreEmbed'
 import { RootState } from '../../store'
 import { useDispatch, useSelector } from 'react-redux'
 import useSendVertexMessage from '../../hooks/useSendVertexMessage'
+import useConversationalAnalytics from '../../hooks/useConversationalAnalytics'
 import {
   addMessage,
   AssistantState,
@@ -53,8 +54,11 @@ const AgentPage = () => {
   const endOfMessagesRef = useRef<HTMLDivElement>(null) // Ref for the last message
   const dispatch = useDispatch()
   const [expanded, setExpanded] = useState(false)
-  const { generateExploreParams, isSummarizationPrompt, summarizePrompts, determineExplore } =
+  const { generateExploreParams: generateExploreParamsVertex, isSummarizationPrompt, summarizePrompts, determineExplore, generateSharedContext } =
     useSendVertexMessage()
+  
+  // Use ConversationalAnalytics as the primary API
+  const { generateBaseExploreParams: generateBaseExploreParamsNew, generateExploreParams } = useConversationalAnalytics()
 
   const {
     isChatMode,
@@ -237,12 +241,44 @@ const AgentPage = () => {
       );
     }
 
-    const newExploreParams = await generateExploreParams(
-      promptSummary,
-      dimensions,
-      measures,
-      exploreKey // Now we pass the exploreKey directly instead of the pre-processed examples
-    )
+    // Generate shared context for fallback API call
+    const sharedContext = generateSharedContext(dimensions, measures, exploreGenerationExamples) || ''
+    
+    // Use ConversationalAnalytics API as primary (with Vertex AI as fallback)
+    let newExploreParams = {};
+    let assistantMessages: string[] = [];
+    
+    try {
+      console.log('Using ConversationalAnalytics API as primary...');
+      const caResponse = await generateBaseExploreParamsNew(promptSummary, exploreGenerationExamples);
+      newExploreParams = caResponse.exploreParams;
+      assistantMessages = caResponse.assistantMessages;
+      
+      console.log('ConversationalAnalytics API successful:', {
+        exploreParams: newExploreParams,
+        assistantMessages: assistantMessages
+      });
+      
+      // If we got a valid response from ConversationalAnalytics, use it
+      if (Object.keys(newExploreParams).length > 0) {
+        console.log('Using ConversationalAnalytics response');
+      } else {
+        throw new Error('ConversationalAnalytics returned empty exploreParams');
+      }
+    } catch (error) {
+      console.error('ConversationalAnalytics API failed, falling back to Vertex AI:', error);
+      
+      // Fallback to Vertex AI
+      newExploreParams = await generateExploreParamsVertex(
+        promptSummary,
+        dimensions,
+        measures,
+        exploreKey
+      );
+      
+      console.log('Using Vertex AI fallback response');
+    }
+    
     console.log('New Explore URL: ', newExploreParams)
     dispatch(setIsQuerying(false))
     dispatch(setQuery(''))
@@ -253,6 +289,22 @@ const AgentPage = () => {
         summarizedPrompt: promptSummary,
       }),
     )
+
+    // Add assistant messages from ConversationalAnalytics API if available
+    if (assistantMessages && assistantMessages.length > 0) {
+      console.log(`Adding ${assistantMessages.length} assistant messages to chat`);
+      assistantMessages.forEach((message, index) => {
+        dispatch(
+          addMessage({
+            uuid: uuidv4(),
+            message: message,
+            actor: 'system',
+            createdAt: Date.now() + index, // Slight time offset to maintain order
+            type: 'text',
+          }),
+        );
+      });
+    }
 
     if (isSummary) {
       dispatch(
@@ -275,7 +327,7 @@ const AgentPage = () => {
           uuid: uuidv4(),
           summarizedPrompt: promptSummary,
           actor: 'system',
-          createdAt: Date.now(),
+          createdAt: Date.now() + (assistantMessages?.length || 0) + 1,
           type: 'explore',
         }),
       )
@@ -286,7 +338,7 @@ const AgentPage = () => {
 
     // update the history with the current contents of the thread
     dispatch(updateLastHistoryEntry())
-  }, [query, semanticModels, examples, currentExplore, currentExploreThread])
+  }, [query, semanticModels, examples, currentExplore, currentExploreThread, generateBaseExploreParamsNew])
 
   const isDataLoaded = isBigQueryMetadataLoaded && isSemanticModelLoaded
 
