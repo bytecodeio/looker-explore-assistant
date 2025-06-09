@@ -38,34 +38,35 @@ const MessageThread = ({ endOfMessageRef }: MessageThreadProps) => {
   return (
     <div className="">
       {messages.map((message, i) => {
+        const uniqueKey = `${message.uuid}-${i}`; // Ensure unique keys by appending the index
+
         if (message.type === 'explore') {
-          
           const shouldAutoOpen = !autoOpenTriggered.current && i === 1 && messages.length === 2;
           if (shouldAutoOpen) {
-            autoOpenTriggered.current = true; // Set the ref to true after triggering autoOpen
+            autoOpenTriggered.current = true;
           }
 
           return (
             <ExploreMessage
-              key={message.uuid}
+              key={uniqueKey}
               exploreParams={message.exploreParams}
               modelName={currentExploreThread.modelName}
               exploreId={currentExploreThread.exploreId}
               prompt={message.summarizedPrompt}
               autoOpen={shouldAutoOpen}
             />
-          )
+          );
         } else if (message.type === 'summarize') {
-          return <SummaryMessage key={message.uuid} message={message} onSummaryComplete={handleSummaryComplete} />
+          return <SummaryMessage key={uniqueKey} message={message} onSummaryComplete={handleSummaryComplete} />;
         } else {
           return (
             <Message
-              key={message.uuid}
+              key={uniqueKey}
               message={message.message}
               actor={message.actor}
               createdAt={message.createdAt}
             />
-          )
+          );
         }
       })}
       {isQuerying && (

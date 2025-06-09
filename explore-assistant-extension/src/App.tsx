@@ -8,16 +8,19 @@ import { useBigQueryExamples } from './hooks/useBigQueryExamples'
 import useSendVertexMessage from './hooks/useSendVertexMessage'
 import { useAutoOAuth } from './hooks/useAutoOAuth'
 import { useUserAttributes } from './hooks/useUserAttributes'
+import { useAdminAuth } from './hooks/useAdminAuth'
 import { setInitialTestsCompleted } from './slices/assistantSlice'
 import AgentPage from './pages/AgentPage'
 import SettingsModal from './pages/AgentPage/Settings'
-import ConnectionBanner from './components/Banner/ConnectionBanner'  // Import the new banner
-import { Box, CircularProgress, Typography, Button } from '@material-ui/core'
+import { AuthModal } from './components/Auth/AuthModal'
+import ConnectionBanner from './components/Banner/ConnectionBanner'
+import { Box, CircularProgress, Typography, Button } from '@mui/material'
 
 const ExploreApp = () => {
   const dispatch = useDispatch()
   const { settings, bigQueryTestSuccessful, vertexTestSuccessful, oauth, userAttributesLoaded, initialTestsCompleted } = useSelector((state: RootState) => state.assistant) as any
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   
   // For tracking token validation attempts
   const tokenValidationCounter = useRef(0)
@@ -29,6 +32,9 @@ const ExploreApp = () => {
   
   // Skip auto OAuth if settings modal is open
   const { isAuthenticating, hasValidToken, error: oauthError, validationInProgress } = useAutoOAuth(isSettingsOpen)
+  
+  // Use centralized admin auth
+  const { isAdmin, isCheckingAdmin } = useAdminAuth()
 
   useLookerFields()
   const { testBigQuerySettings } = useBigQueryExamples()
@@ -50,47 +56,47 @@ const ExploreApp = () => {
 
   // NEW INITIALIZATION FLOW: User attributes → Tests → Conditional settings modal
   useEffect(() => {
-    const runInitialTests = async () => {
+    if (!initialTestsCompleted) {
+      const runInitialTests = async () => {
+        testsRunCounter.current++
 
-      testsRunCounter.current++
+        // Validate existing token before running tests
+        const existingToken = settings['oauth2_token']?.value;
 
-      // Validate existing token before running tests
-      const existingToken = settings['oauth2_token']?.value;
-      
-      if (existingToken) {
-        lastCheckedToken.current = existingToken
-        tokenValidationCounter.current++
-        
-      
-        
-        try {
-          const tokenInfo = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + existingToken);
-      
-          if (!tokenInfo.ok) {
-            console.error('Existing OAuth token is invalid during initial tests');
-            // Don't open settings modal here - let the tests fail and then decide
-          } 
-        } catch (error) {
-          console.log('Error validating token in App component:', error)
-          // Don't open settings modal here - let the tests fail and then decide
+        if (existingToken && lastCheckedToken.current !== existingToken) {
+          lastCheckedToken.current = existingToken
+          tokenValidationCounter.current++
+
+          try {
+            const tokenInfo = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + existingToken);
+
+            if (!tokenInfo.ok) {
+              console.error('Existing OAuth token is invalid during initial tests');
+            }
+          } catch (error) {
+            console.log('Error validating token in App component:', error);
+          }
         }
-      }
 
-      await testBigQuerySettings();
-      await testVertexSettings();
-      
-      // Mark initial tests as completed
-      dispatch(setInitialTestsCompleted(true))
-      
-      
-    };
+        if (!bigQueryTestSuccessful) {
+          await testBigQuerySettings();
+        }
 
-    runInitialTests();
-  }, [userAttributesLoaded, initialTestsCompleted, testBigQuerySettings, testVertexSettings, settings, dispatch]);
+        if (!vertexTestSuccessful) {
+          await testVertexSettings();
+        }
+
+        // Mark initial tests as completed
+        dispatch(setInitialTestsCompleted(true));
+      };
+
+      runInitialTests();
+    }
+  }, [initialTestsCompleted, bigQueryTestSuccessful, vertexTestSuccessful, settings, dispatch, testBigQuerySettings, testVertexSettings]);
 
   // CONDITIONAL SETTINGS MODAL: Only open if tests fail due to missing critical configuration
   useEffect(() => {
-    if (!userAttributesLoaded || !initialTestsCompleted) {
+    if (!userAttributesLoaded || !initialTestsCompleted || isCheckingAdmin) {
       return // Wait for initialization to complete
     }
 
@@ -102,22 +108,40 @@ const ExploreApp = () => {
 
     const testsHaveFailed = !bigQueryTestSuccessful || !vertexTestSuccessful
 
-    if (testsHaveFailed && hasCriticalMissingSettings && !isSettingsOpen) {
-       setIsSettingsOpen(true)
+    if (testsHaveFailed && hasCriticalMissingSettings && !isSettingsOpen && !isAuthModalOpen) {
+      // For admin users, open the full settings modal
+      // For non-admin users, open the simplified auth modal
+      if (isAdmin) {
+        setIsSettingsOpen(true)
+      } else {
+        setIsAuthModalOpen(true)
+      }
     }
-  }, [userAttributesLoaded, initialTestsCompleted, bigQueryTestSuccessful, vertexTestSuccessful, settings, isSettingsOpen]);
+  }, [userAttributesLoaded, initialTestsCompleted, isCheckingAdmin, bigQueryTestSuccessful, vertexTestSuccessful, settings, isSettingsOpen, isAuthModalOpen, isAdmin]);
 
   // Show error state if OAuth fails or times out
   if (oauthError || showFallbackUI) {
     return (
       <>
-        <SettingsModal
-          open={isSettingsOpen}
-          onClose={() => {
-            setIsSettingsOpen(false)
-            setShowFallbackUI(false)
-          }}
-        />
+        {isAdmin ? (
+          <SettingsModal
+            open={isSettingsOpen}
+            onClose={() => {
+              setIsSettingsOpen(false)
+              setShowFallbackUI(false)
+            }}
+          />
+        ) : (
+          <AuthModal
+            open={isAuthModalOpen}
+            onClose={() => {
+              setIsAuthModalOpen(false)
+              setShowFallbackUI(false)
+            }}
+            title="Authentication Error"
+            description="There seems to be an issue with authentication. Please check your OAuth Client ID and try again."
+          />
+        )}
         <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" height="100vh" p={3}>
           <Typography variant="h6" color="error" gutterBottom>
             {oauthError || 'Authentication Error'}
@@ -130,11 +154,15 @@ const ExploreApp = () => {
               variant="contained" 
               color="primary"
               onClick={() => {
-                setIsSettingsOpen(true)
+                if (isAdmin) {
+                  setIsSettingsOpen(true)
+                } else {
+                  setIsAuthModalOpen(true)
+                }
                 setShowFallbackUI(false)
               }}
             >
-              Open Settings
+              {isAdmin ? 'Open Settings' : 'Authenticate'}
             </Button>
           </Box>
         </Box>
@@ -142,8 +170,8 @@ const ExploreApp = () => {
     )
   }
 
-  // Show loading state while user attributes are being loaded
-  if (isLoadingUserAttributes || !userAttributesLoaded) {
+  // Show loading state while user attributes are being loaded or admin status is being checked
+  if (isLoadingUserAttributes || !userAttributesLoaded || isCheckingAdmin) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
         <CircularProgress />
@@ -166,12 +194,22 @@ const ExploreApp = () => {
 
   return (
     <>
-      <SettingsModal
-        open={isSettingsOpen}
-        onClose={() => {
-          setIsSettingsOpen(false)
-        }}
-      />
+      {isAdmin ? (
+        <SettingsModal
+          open={isSettingsOpen}
+          onClose={() => {
+            setIsSettingsOpen(false)
+          }}
+        />
+      ) : (
+        <AuthModal
+          open={isAuthModalOpen}
+          onClose={() => {
+            setIsAuthModalOpen(false)
+          }}
+        />
+      )}
+      
       {bigQueryTestSuccessful && vertexTestSuccessful ? (
         <>
           <ConnectionBanner initialVisible={bannerInitialState} />
@@ -197,9 +235,15 @@ const ExploreApp = () => {
             <Button 
               variant="contained" 
               color="primary"
-              onClick={() => setIsSettingsOpen(true)}
+              onClick={() => {
+                if (isAdmin) {
+                  setIsSettingsOpen(true)
+                } else {
+                  setIsAuthModalOpen(true)
+                }
+              }}
             >
-              Open Settings
+              {isAdmin ? 'Open Settings' : 'Authenticate'}
             </Button>
           </Box>
           <Box mt={3}>

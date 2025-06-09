@@ -7,7 +7,6 @@
 # ConversationalAnalytics API by providing secure token exchange.
 
 import os
-import hmac
 import time
 import json
 import logging
@@ -19,14 +18,12 @@ import requests
 from google.auth import default
 from google.auth.transport.requests import Request
 from google.oauth2 import service_account
-import jwt
 
 logging.basicConfig(level=logging.INFO)
 
 # Initialize environment variables
 project = os.environ.get("PROJECT")
 location = os.environ.get("REGION", "us-central1")
-mcp_shared_secret = os.environ.get("MCP_SHARED_SECRET")
 looker_api_client_id = os.environ.get("LOOKER_API_CLIENT_ID")
 looker_api_client_secret = os.environ.get("LOOKER_API_CLIENT_SECRET")
 looker_base_url = os.environ.get("LOOKER_BASE_URL")
@@ -36,27 +33,59 @@ def get_response_headers():
     return {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, X-Signature"
+        "Access-Control-Allow-Headers": "Content-Type, Authorization"
     }
 
-def validate_mcp_signature(request_data: bytes, signature: str) -> bool:
-    """Validate HMAC signature for MCP requests"""
-    if not signature or not mcp_shared_secret:
-        logging.error(f"Missing signature or secret: signature={signature}, has_secret={bool(mcp_shared_secret)}")
-        return False
-    
-    secret = mcp_shared_secret.encode("utf-8")
-    hmac_obj = hmac.new(secret, request_data, "sha256")
-    expected_signature = hmac_obj.hexdigest()
-    
-    logging.info(f"Signature validation: received={signature}, expected={expected_signature}")
-    logging.info(f"Request data: {request_data.decode('utf-8')}")
-    logging.info(f"Request data length: {len(request_data)}")
-    
-    return hmac.compare_digest(signature, expected_signature)
+def validate_oauth_token(bearer_token: str) -> Optional[Dict[str, Any]]:
+    """Validate OAuth token using GCP token_info endpoint"""
+    try:
+        # Remove 'Bearer ' prefix if present
+        if bearer_token.startswith('Bearer '):
+            bearer_token = bearer_token[7:]
+        
+        # Call Google's token info endpoint
+        token_info_url = f"https://oauth2.googleapis.com/tokeninfo?access_token={bearer_token}"
+        response = requests.get(token_info_url)
+        print(f"Validating token: {bearer_token}")
+        logging.info(f"Validating token: {bearer_token}")
+        # Check if the response is successful
+        print(f"Response status code: {response.status_code}")
+        logging.info(f"Response status code: {response.status_code}")
+        print(f"Response text: {response.text}")
+        logging.info(f"Response text: {response.text}")
 
-def get_google_oauth_token() -> Optional[str]:
-    """Get Google OAuth token using service account credentials"""
+        if not response.ok:
+            logging.error(f"Token validation failed: {response.status_code} - {response.text}")
+            return None
+        
+        token_info = response.json()
+        
+        # Check if token has required scope
+        scopes = token_info.get('scope', '').split()
+        required_scope = 'https://www.googleapis.com/auth/cloud-platform'
+        if required_scope not in scopes:
+            logging.error(f"Token missing required scope: {required_scope}")
+            return None
+        
+        # Extract user information
+        email = token_info.get('email')
+        if not email:
+            logging.error("No email found in token info")
+            return None
+        
+        logging.info(f"Token validated for user: {email}")
+        return {
+            'email': email,
+            'user_id': token_info.get('sub'),
+            'expires_in': token_info.get('expires_in', 0)
+        }
+        
+    except Exception as e:
+        logging.error(f"Error validating OAuth token: {e}")
+        return None
+
+def get_service_account_oauth_token() -> Optional[str]:
+    """Get Google OAuth token using service account credentials for CA API calls"""
     try:
         if service_account_json:
             # Load service account from JSON string
@@ -73,37 +102,11 @@ def get_google_oauth_token() -> Optional[str]:
         credentials.refresh(Request())
         return credentials.token
     except Exception as e:
-        logging.error(f"Error getting Google OAuth token: {e}")
+        logging.error(f"Error getting service account OAuth token: {e}")
         return None
 
-def validate_looker_session(session_info: Dict[str, Any]) -> Dict[str, Any]:
-    """Validate Looker session and get user information"""
-    try:
-        user_id = session_info.get('userId')
-        looker_host = session_info.get('lookerHost')
-        timestamp = session_info.get('timestamp', 0)
-        
-        # Basic validation
-        if not user_id or not looker_host:
-            return {'is_valid': False, 'error': 'Missing session information'}
-        
-        # Check timestamp (within last 5 minutes)
-        if time.time() - (timestamp / 1000) > 300:  # 5 minutes
-            return {'is_valid': False, 'error': 'Session timestamp too old'}
-        
-        # TODO: Add more sophisticated session validation
-        # For now, we'll trust the session info if it has required fields
-        return {
-            'is_valid': True,
-            'user_id': user_id,
-            'looker_host': looker_host
-        }
-    except Exception as e:
-        logging.error(f"Error validating Looker session: {e}")
-        return {'is_valid': False, 'error': str(e)}
-
-def generate_looker_access_token(user_id: str, looker_host: str) -> Optional[str]:
-    """Generate a scoped Looker access token for the user"""
+def get_looker_api_token() -> Optional[str]:
+    """Get Looker API admin token for user operations"""
     try:
         if not all([looker_api_client_id, looker_api_client_secret, looker_base_url]):
             logging.error("Looker API credentials not configured")
@@ -128,84 +131,214 @@ def generate_looker_access_token(user_id: str, looker_host: str) -> Optional[str
             logging.error("No access token received from Looker API")
             return None
         
-        # For non-admin users, we can't use login_user directly
-        # Instead, we'll generate a limited-scope token that works for the specific user
-        # This would require additional Looker API setup for impersonation
-        
-        # TODO: Implement proper user impersonation token generation
-        # For now, return the service account token with user context
-        
         return access_token
     except Exception as e:
-        logging.error(f"Error generating Looker access token: {e}")
+        logging.error(f"Error getting Looker API token: {e}")
         return None
 
-def handle_token_exchange(request_data: Dict[str, Any]) -> Dict[str, Any]:
+def find_looker_user_by_email(email: str, admin_token: str) -> Optional[Dict[str, Any]]:
+    """Find Looker user by email address"""
+    try:
+        # Search for user by email
+        search_url = f"{looker_base_url}/api/4.0/users/search"
+        headers = {'Authorization': f'token {admin_token}'}
+        params = {'email': email}
+        
+        response = requests.get(search_url, headers=headers, params=params)
+        if not response.ok:
+            logging.error(f"Failed to search for user: {response.status_code} - {response.text}")
+            return None
+        
+        users = response.json()
+        if not users:
+            logging.error(f"No Looker user found with email: {email}")
+            return None
+        
+        user = users[0]  # Take the first match
+        logging.info(f"Found Looker user: {user.get('id')} - {user.get('email')}")
+        return user
+        
+    except Exception as e:
+        logging.error(f"Error finding Looker user: {e}")
+        return None
+
+def generate_user_looker_token(user_id: int, admin_token: str) -> Optional[str]:
+    """Generate a Looker access token for a specific user using login_user"""
+    try:
+        # Use login_user to switch to the user's context
+        login_url = f"{looker_base_url}/api/4.0/login/{user_id}"
+        headers = {'Authorization': f'token {admin_token}'}
+        
+        response = requests.post(login_url, headers=headers)
+        if not response.ok:
+            logging.error(f"Failed to login as user {user_id}: {response.status_code} - {response.text}")
+            return None
+        
+        login_result = response.json()
+        user_token = login_result.get('access_token')
+        
+        if not user_token:
+            logging.error(f"No access token received for user {user_id}")
+            return None
+        
+        logging.info(f"Successfully generated token for user {user_id}")
+        return user_token
+        
+    except Exception as e:
+        logging.error(f"Error generating user Looker token: {e}")
+        return None
+
+def handle_token_exchange(oauth_token_info: Dict[str, Any]) -> Dict[str, Any]:
     """Handle token exchange request from extension"""
     try:
-        session_info = request_data.get('sessionInfo')
-        if not session_info:
-            return {'error': 'Missing session information'}, 400
+        user_email = oauth_token_info['email']
         
-        # Validate the session
-        session_validation = validate_looker_session(session_info)
-        if not session_validation.get('is_valid'):
-            return {'error': session_validation.get('error', 'Invalid session')}, 401
+        # Get admin Looker API token
+        admin_token = get_looker_api_token()
+        if not admin_token:
+            return {'error': 'Failed to obtain Looker admin token'}, 500
         
-        # Get Google OAuth token for ConversationalAnalytics API
-        google_oauth_token = get_google_oauth_token()
-        if not google_oauth_token:
-            return {'error': 'Failed to obtain Google OAuth token'}, 500
+        # Find the user in Looker by email
+        looker_user = find_looker_user_by_email(user_email, admin_token)
+        if not looker_user:
+            return {'error': f'User {user_email} not found in Looker'}, 404
         
-        # Generate Looker access token
-        looker_access_token = generate_looker_access_token(
-            session_validation['user_id'],
-            session_validation['looker_host']
-        )
-        if not looker_access_token:
-            return {'error': 'Failed to obtain Looker access token'}, 500
+        # Generate user-specific Looker token
+        user_looker_token = generate_user_looker_token(looker_user['id'], admin_token)
+        if not user_looker_token:
+            return {'error': 'Failed to obtain user Looker token'}, 500
+        
+        # Get service account OAuth token for ConversationalAnalytics API infrastructure
+        service_account_token = get_service_account_oauth_token()
+        if not service_account_token:
+            return {'error': 'Failed to obtain service account OAuth token'}, 500
         
         # Return tokens with expiry
+        # Note: The user_looker_token will be used as the OAuth token for CA API calls
+        # This ensures the CA API sees requests as coming from the specific Looker user
         tokens = {
-            'google_oauth_token': google_oauth_token,
-            'looker_access_token': looker_access_token,
+            'google_oauth_token': user_looker_token,  # Use Looker user token for CA API
+            'looker_access_token': user_looker_token,  # Also return for direct Looker API calls
+            'service_account_token': service_account_token,  # For infrastructure needs
             'expires_at': time.time() + 3600  # 1 hour expiry
         }
         
-        logging.info(f"Token exchange successful for user {session_validation['user_id']}")
+        logging.info(f"Token exchange successful for user {user_email} (Looker ID: {looker_user['id']})")
         return {'tokens': tokens}, 200
         
     except Exception as e:
         logging.error(f"Error in token exchange: {e}")
         return {'error': 'Internal server error'}, 500
 
+def call_conversational_analytics_api(user_looker_token: str, request_body: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Call Conversational Analytics API with proper authentication
+    
+    Args:
+        user_looker_token: The Looker user token for accessing Looker data
+        request_body: The request body for the CA API
+    """
+    try:
+        if not project or not location:
+            logging.error("Project or location not configured for CA API")
+            return None
+        
+        # Get service account OAuth token for Google Cloud API calls
+        service_account_token = get_service_account_oauth_token()
+        if not service_account_token:
+            logging.error("Failed to obtain service account OAuth token for CA API")
+            return None
+        
+        # Add Looker credentials to the request body if not already present
+        if 'inlineContext' in request_body and 'datasource_references' in request_body['inlineContext']:
+            if 'looker' in request_body['inlineContext']['datasource_references']:
+                # Add the Looker user token to the credentials section
+                if 'credentials' not in request_body['inlineContext']['datasource_references']['looker']:
+                    request_body['inlineContext']['datasource_references']['looker']['credentials'] = {
+                        'oauth': {
+                            'token': {
+                                'access_token': user_looker_token
+                            }
+                        }
+                    }
+                    logging.info("Added Looker credentials to request body")
+        
+        # Use the Conversational Analytics API endpoint (not regular Vertex AI)
+        ca_api_url = f"https://geminidataanalytics.googleapis.com/v1alpha/projects/{project}/locations/{location}:chat"
+        
+        headers = {
+            'Authorization': f'Bearer {service_account_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        logging.info(f"Making CA API request to: {ca_api_url}")
+        response = requests.post(ca_api_url, headers=headers, json=request_body)
+        
+        if not response.ok:
+            logging.error(f"CA API call failed: {response.status_code} - {response.text}")
+            return None
+        
+        logging.info("CA API call successful")
+        return response.json()
+        
+    except Exception as e:
+        logging.error(f"Error calling Conversational Analytics API: {e}")
+        return None
+
 def create_mcp_flask_app():
     """Create Flask app with MCP endpoints"""
     app = Flask(__name__)
     CORS(app)
     
-    @app.route("/mcp/token-exchange", methods=["POST", "OPTIONS"])
-    def token_exchange():
+    # Log registered endpoints
+    logging.info("Registering MCP endpoints...")
+    
+    @app.route("/mcp/conversational-analytics", methods=["POST", "OPTIONS"])
+    def conversational_analytics():
         if request.method == "OPTIONS":
             return "", 204, get_response_headers()
         
         try:
-            # Validate signature
-            signature = request.headers.get("X-Signature")
-            request_data = request.get_data()
+            # Get Bearer token from Authorization header
+            auth_header = request.headers.get("Authorization")
+            if not auth_header or not auth_header.startswith("Bearer "):
+                return jsonify({'error': 'Missing or invalid Authorization header'}), 401, get_response_headers()
             
-            if not validate_mcp_signature(request_data, signature):
-                return jsonify({'error': 'Invalid signature'}), 403, get_response_headers()
+            # Validate OAuth token
+            oauth_token_info = validate_oauth_token(auth_header)
+            if not oauth_token_info:
+                return jsonify({'error': 'Invalid OAuth token'}), 401, get_response_headers()
             
-            # Process token exchange
-            request_json = request.get_json()
-            result, status_code = handle_token_exchange(request_json)
+            # Get user's Looker token
+            user_email = oauth_token_info['email']
+            admin_token = get_looker_api_token()
+            if not admin_token:
+                return jsonify({'error': 'Failed to obtain Looker admin token'}), 500, get_response_headers()
             
-            return jsonify(result), status_code, get_response_headers()
+            looker_user = find_looker_user_by_email(user_email, admin_token)
+            if not looker_user:
+                return jsonify({'error': f'User {user_email} not found in Looker'}), 404, get_response_headers()
+            
+            user_looker_token = generate_user_looker_token(looker_user['id'], admin_token)
+            if not user_looker_token:
+                return jsonify({'error': 'Failed to obtain user Looker token'}), 500, get_response_headers()
+            
+            # Get the CA API request body from the request
+            request_body = request.get_json()
+            if not request_body:
+                return jsonify({'error': 'Missing request body'}), 400, get_response_headers()
+            
+            # Call CA API using the user's Looker token
+            ca_response = call_conversational_analytics_api(user_looker_token, request_body)
+            if not ca_response:
+                return jsonify({'error': 'CA API call failed'}), 500, get_response_headers()
+            
+            return jsonify(ca_response), 200, get_response_headers()
             
         except Exception as e:
-            logging.error(f"Token exchange error: {e}")
+            logging.error(f"Conversational Analytics error: {e}")
             return jsonify({'error': 'Internal server error'}), 500, get_response_headers()
+    
+    logging.info("Registered endpoint: /mcp/conversational-analytics")
     
     @app.route("/mcp/health", methods=["GET"])
     def health_check():
@@ -213,13 +346,23 @@ def create_mcp_flask_app():
         return jsonify({
             'status': 'healthy',
             'service': 'mcp-server',
-            'timestamp': time.time()
+            'timestamp': time.time(),
+            'endpoints': ['/mcp/conversational-analytics', '/mcp/health']
         }), 200, get_response_headers()
+    
+    logging.info("Registered endpoint: /mcp/health")
     
     @app.errorhandler(500)
     def internal_server_error(error):
         return jsonify({'error': 'Internal server error'}), 500, get_response_headers()
     
+    # Remove HTTPS redirect for local development - causes issues with SSL
+    # @app.before_request  
+    # def redirect_to_https():
+    #     if not request.is_secure:
+    #         return jsonify({'error': 'Please use HTTPS'}), 400
+    
+    logging.info("MCP Flask app created with endpoints: /mcp/conversational-analytics, /mcp/health")
     return app
 
 @functions_framework.http
@@ -230,30 +373,54 @@ def mcp_cloud_function_entrypoint(request):
     
     path = request.path
     
-    if path == "/mcp/token-exchange":
+    if path == "/mcp/conversational-analytics":
         try:
-            # Validate signature
-            signature = request.headers.get("X-Signature")
-            request_data = request.get_data()
+            # Get Bearer token from Authorization header
+            auth_header = request.headers.get("Authorization")
+            if not auth_header or not auth_header.startswith("Bearer "):
+                return jsonify({'error': 'Missing or invalid Authorization header'}), 401, get_response_headers()
             
-            if not validate_mcp_signature(request_data, signature):
-                return jsonify({'error': 'Invalid signature'}), 403, get_response_headers()
+            # Validate OAuth token
+            oauth_token_info = validate_oauth_token(auth_header)
+            if not oauth_token_info:
+                return jsonify({'error': 'Invalid OAuth token'}), 401, get_response_headers()
             
-            # Process token exchange
-            request_json = request.get_json()
-            result, status_code = handle_token_exchange(request_json)
+            # Get user's Looker token
+            user_email = oauth_token_info['email']
+            admin_token = get_looker_api_token()
+            if not admin_token:
+                return jsonify({'error': 'Failed to obtain Looker admin token'}), 500, get_response_headers()
             
-            return jsonify(result), status_code, get_response_headers()
+            looker_user = find_looker_user_by_email(user_email, admin_token)
+            if not looker_user:
+                return jsonify({'error': f'User {user_email} not found in Looker'}), 404, get_response_headers()
+            
+            user_looker_token = generate_user_looker_token(looker_user['id'], admin_token)
+            if not user_looker_token:
+                return jsonify({'error': 'Failed to obtain user Looker token'}), 500, get_response_headers()
+            
+            # Get the CA API request body from the request
+            request_body = request.get_json()
+            if not request_body:
+                return jsonify({'error': 'Missing request body'}), 400, get_response_headers()
+            
+            # Call CA API using the user's Looker token
+            ca_response = call_conversational_analytics_api(user_looker_token, request_body)
+            if not ca_response:
+                return jsonify({'error': 'CA API call failed'}), 500, get_response_headers()
+            
+            return jsonify(ca_response), 200, get_response_headers()
             
         except Exception as e:
-            logging.error(f"Token exchange error: {e}")
+            logging.error(f"Conversational Analytics error: {e}")
             return jsonify({'error': 'Internal server error'}), 500, get_response_headers()
     
     elif path == "/mcp/health":
         return jsonify({
             'status': 'healthy',
             'service': 'mcp-server',
-            'timestamp': time.time()
+            'timestamp': time.time(),
+            'endpoints': ['/mcp/conversational-analytics', '/mcp/health']
         }), 200, get_response_headers()
     
     else:
@@ -267,6 +434,29 @@ if __name__ == "__main__":
     else:
         # Local Flask mode
         app = create_mcp_flask_app()
-        port = int(os.environ.get("PORT", 8001))
-        app.run(debug=True, host="0.0.0.0", port=port)
+        port = int(os.environ.get("PORT", 8000))  # Changed from 8001 to 8000
+        
+        logging.info(f"Starting MCP Server on port {port}")
+        logging.info("Available endpoints:")
+        logging.info("  - POST /mcp/conversational-analytics")
+        logging.info("  - GET  /mcp/health")
+        
+        # Enable HTTPS for local development
+        use_https = os.environ.get("USE_HTTPS", "false").lower() == "true"
+        
+        if use_https:
+            # For HTTPS, you'll need SSL certificates
+            ssl_cert = os.environ.get("SSL_CERT_PATH", "cert.pem")
+            ssl_key = os.environ.get("SSL_KEY_PATH", "key.pem")
+            
+            if os.path.exists(ssl_cert) and os.path.exists(ssl_key):
+                logging.info(f"Starting HTTPS server on port {port}")
+                app.run(debug=True, host="0.0.0.0", port=port, ssl_context=(ssl_cert, ssl_key))
+            else:
+                logging.warning("SSL certificates not found, falling back to HTTP")
+                app.run(debug=True, host="0.0.0.0", port=port)
+        else:
+            # Run without SSL for local development
+            app.run(debug=True, host="0.0.0.0", port=port)
+        
         print(f"MCP Server running on port {port}")

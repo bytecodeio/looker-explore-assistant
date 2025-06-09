@@ -6,14 +6,14 @@ import {
   setSetting,
   AssistantState,
   resetExploreAssistant,
-  setOAuthError,
-  setOAuthAuthenticating,
 } from '../../slices/assistantSlice'
 import { ExtensionContext } from '@looker/extension-sdk-react'
 import { useBigQueryExamples } from '../../hooks/useBigQueryExamples'
 import useSendVertexMessage from '../../hooks/useSendVertexMessage'
 import InfoIcon from '@mui/icons-material/Info'
 import { useAutoOAuth } from '../../hooks/useAutoOAuth'
+import { useAdminAuth } from '../../hooks/useAdminAuth'
+import { AuthButton } from '../../components/Auth/AuthButton'
 
 interface SettingsModalProps {
   open: boolean
@@ -37,11 +37,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
 
   const { testBigQuerySettings } = useBigQueryExamples()
   const { testVertexSettings } = useSendVertexMessage()
-  const [isAdmin, setIsAdmin] = useState(false)
-
-  const GOOGLE_CLIENT_ID = settings['google_oauth_client_id']?.value as string || '';
-  const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/cloud-platform'
   
+  // Use centralized admin auth hook
+  const { isAdmin, doOAuth, isAuthenticating } = useAdminAuth()
+  
+  const { error: oauthHookError } = useAutoOAuth(false)
+
   // Load user attribute metadata (for saving purposes)
   const loadUserAttributeMetadata = async () => {
     try {
@@ -67,62 +68,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     }
   };
 
-  // Use our hook but don't trigger auto-authentication here
-  const { isAuthenticating, hasValidToken, error: oauthHookError } = useAutoOAuth()
-
-  // OAuth authentication - Now as a function that can be called on demand
-  const doOAuth = async () => {
-    try {
-      // Check if we have a client ID
-      if (!settings['google_oauth_client_id']?.value) {
-        console.error('OAuth client ID is required but not provided');
-        return false;
-      }
-
-      // Validate existing token if present
-      const existingToken = settings['oauth2_token']?.value;
-      if (existingToken) {
-        const tokenInfo = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + existingToken);
-        if (tokenInfo.ok) {
-          return true;
-        }
-      }
-
-      // Skip if already authenticating
-      if (isAuthenticating) {
-        return false;
-      }
-
-      const clientId = settings['google_oauth_client_id']?.value as string;
-
-      // Clear any previous error and set authenticating state
-      dispatch(setOAuthError(null));
-      dispatch(setOAuthAuthenticating(true));
-
-      const response = await extensionSDK.oauth2Authenticate(
-        'https://accounts.google.com/o/oauth2/v2/auth',
-        {
-          client_id: clientId,
-          scope: GOOGLE_SCOPES,
-          response_type: 'token',
-        }
-      );
-
-      const { access_token } = response;
-      if (access_token) {
-        dispatch(setSetting({ id: 'oauth2_token', value: access_token }));
-        return true;
-      }
-      dispatch(setOAuthError('Failed to receive access token from OAuth flow'));
-      return false;
-    } catch (error) {
-      dispatch(setOAuthError(`OAuth authentication failed: ${error.message || 'Unknown error'}`));
-      return false;
-    } finally {
-      dispatch(setOAuthAuthenticating(false));
-    }
-  }
-
   // Load user attribute metadata once when component mounts (for saving functionality)
   useEffect(() => {
     const fetchUserAttributeMetadata = async () => {
@@ -140,7 +85,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
 
   // Run tests when settings are opened
   useEffect(() => {
-    if (open) {
+    if (open && (bigQueryTestResult === null || vertexTestResult === null)) {
       const runTests = async () => {
         const bigQueryResult = await testBigQuerySettings()
         setBigQueryTestResult(bigQueryResult)
@@ -149,52 +94,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
       }
       runTests()
     }
-  }, [open]);
-
-  // Check admin status
-  useEffect(() => {
-    const checkAdminStatus = async () => {
-      try {
-        const response: any = await core40SDK.ok(core40SDK.me())
-        
-        let adminStatus = false
-        
-        // First, get the actual admin role ID by searching for roles with name 'admin'
-        let adminRoleId: string | null = null
-        try {
-          const adminRoles = await core40SDK.ok(core40SDK.search_roles({
-            name: 'admin'
-          }))
-          
-          if (adminRoles && adminRoles.length > 0) {
-            adminRoleId = adminRoles[0].id || null
-          }
-        } catch (roleError) {
-          console.warn('Could not fetch admin role:', roleError)
-        }
-        
-        // Enhanced admin check with multiple fallbacks
-        // 1. Check is_iam_admin if it exists and is false, but still continue to role check
-        if (typeof response.is_iam_admin === 'boolean') {
-          adminStatus = response.is_iam_admin
-        }
-
-        // 2. Always check role_ids for admin role (even if is_iam_admin is false)
-        if (Array.isArray(response.role_ids)) {
-          // Check against the dynamically fetched admin role ID
-          if (adminRoleId && (response.role_ids.includes(adminRoleId) || response.role_ids.includes(parseInt(adminRoleId)))) {
-            adminStatus = true
-          }
-        }
-        
-        setIsAdmin(adminStatus)
-      } catch (error) {
-        console.error('Error checking admin status:', error)
-        setIsAdmin(false) // Default to false on error
-      }
-    }
-    checkAdminStatus()
-  }, [core40SDK]);
+  }, [open, bigQueryTestResult, vertexTestResult]);
 
   if (!isAdmin) return null;
 
@@ -211,7 +111,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
   // Handle saving settings to user attributes
   const handleSaveSetting = async (id: string, value: string) => {
     // Only persist specific settings
-    if (!['vertex_project', 'vertex_location', 'vertex_model', 'google_oauth_client_id', 'bigquery_example_looker_model_name', 'mcp_server_url', 'mcp_shared_secret'].includes(id)) {
+    if (!['vertex_project', 'vertex_location', 'vertex_model', 'google_oauth_client_id', 'bigquery_example_looker_model_name', 'mcp_server_url'].includes(id)) {
       dispatch(setSetting({ id, value }));
       return;
     }
@@ -261,11 +161,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     if (settings['google_oauth_client_id']?.value && !settings['oauth2_token']?.value) {
       await doOAuth();
     }
-    
-    const bigQueryResult = await testBigQuerySettings()
-    setBigQueryTestResult(bigQueryResult)
-    const vertexResult = await testVertexSettings()
-    setVertexTestResult(vertexResult)
+
+    if (bigQueryTestResult === null) {
+      const bigQueryResult = await testBigQuerySettings()
+      setBigQueryTestResult(bigQueryResult)
+    }
+
+    if (vertexTestResult === null) {
+      const vertexResult = await testVertexSettings()
+      setVertexTestResult(vertexResult)
+    }
   }
 
   // Reset all settings
@@ -289,8 +194,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     id === 'vertex_model' ||
     id === 'google_oauth_client_id' ||
     id === 'bigquery_example_looker_model_name' ||
-    id === 'mcp_server_url' ||
-    id === 'mcp_shared_secret'
+    id === 'mcp_server_url'
   )
 
   return (
@@ -367,14 +271,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
                       }}
                       placeholder="Enter Google OAuth Client ID"
                     />
-                    <Button 
-                      onClick={doOAuth} 
-                      variant="contained" 
+                    <AuthButton
+                      variant="contained"
                       size="small"
-                      disabled={!setting.value || isAuthenticating}
-                    >
-                      {isAuthenticating ? 'Authenticating...' : 'Authenticate'}
-                    </Button>
+                      clientIdRequired={true}
+                    />
                   </Box>
                 ) : typeof setting.value === 'boolean' ? (
                   <Switch

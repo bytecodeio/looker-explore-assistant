@@ -19,32 +19,6 @@ const useConversationalAnalytics = () => {
   // Get Looker instance URI from the extension context
   const lookerInstanceUri = lookerHostData?.hostUrl || ''
 
-  // Helper function to generate MCP request signature
-  const generateMCPSignature = useCallback(async (data: any): Promise<string> => {
-    const mcpSecret = settings['mcp_shared_secret']?.value as string || ''
-    const message = JSON.stringify(data)
-    
-    // Use Web Crypto API to generate HMAC-SHA256 signature
-    const encoder = new TextEncoder()
-    const key = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(mcpSecret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    )
-    
-    const signature = await crypto.subtle.sign(
-      'HMAC',
-      key,
-      encoder.encode(message)
-    )
-    
-    return Array.from(new Uint8Array(signature))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
-  }, [settings])
-
   // Function to get the user-specific OAuth token via MCP server or fallback to Looker SDK
   const getLookerUserToken = useCallback(async (): Promise<string | null> => {
     try {
@@ -60,33 +34,18 @@ const useConversationalAnalytics = () => {
       
       // First, try MCP server token exchange if available
       const mcpServerUrl = settings['mcp_server_url']?.value as string
-      if (mcpServerUrl) {
+      if (mcpServerUrl && oauth2Token) {
         try {
           console.log('Attempting MCP server token exchange...')
-          
-          const sessionInfo = {
-            userId,
-            lookerHost: lookerHostData?.hostUrl,
-            timestamp: Date.now(),
-            extensionId: lookerHostData?.extensionId
-          }
           
           const mcpResponse = await fetch(`${mcpServerUrl}/mcp/token-exchange`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'X-Signature': await generateMCPSignature(sessionInfo)
-            },
-            body: JSON.stringify({ sessionInfo })
+              'Authorization': `Bearer ${oauth2Token}`
+            }
           })
           
-          if (mcpResponse.ok) {
-            const tokenData = await mcpResponse.json()
-            console.log('Successfully obtained token via MCP server')
-            return tokenData.tokens.looker_access_token
-          } else {
-            console.warn('MCP server token exchange failed, falling back to direct method')
-          }
         } catch (mcpError) {
           console.warn('MCP server unavailable, falling back to direct method:', mcpError)
         }
@@ -127,58 +86,7 @@ const useConversationalAnalytics = () => {
         throw new Error('Looker instance URI is required but not provided');
       }
 
-      // Get OAuth token (either from MCP server or settings)
-      let googleOAuthToken = oauth2Token
-      let lookerUserToken = null
-      
-      const mcpServerUrl = settings['mcp_server_url']?.value as string
-      if (mcpServerUrl) {
-        try {
-          console.log('Attempting to get tokens via MCP server...')
-          
-          const currentUser = await core40SDK.ok(core40SDK.me())
-          const sessionInfo = {
-            userId: currentUser.id,
-            lookerHost: lookerInstanceUri,
-            timestamp: Date.now(),
-            extensionId: lookerHostData?.extensionId
-          }
-          
-          const mcpResponse = await fetch(`${mcpServerUrl}/mcp/token-exchange`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Signature': await generateMCPSignature(sessionInfo)
-            },
-            body: JSON.stringify({ sessionInfo })
-          })
-          
-          if (mcpResponse.ok) {
-            const tokenData = await mcpResponse.json()
-            googleOAuthToken = tokenData.tokens.google_oauth_token
-            lookerUserToken = tokenData.tokens.looker_access_token
-            console.log('Successfully obtained tokens via MCP server')
-          } else {
-            console.warn('MCP server token exchange failed, using fallback tokens')
-          }
-        } catch (mcpError) {
-          console.warn('MCP server unavailable, using fallback tokens:', mcpError)
-        }
-      }
-      
-      // Fallback: get the user-specific OAuth token via Looker SDK if not from MCP
-      if (!lookerUserToken) {
-        lookerUserToken = await getLookerUserToken()
-        if (!lookerUserToken) {
-          throw new Error('Failed to obtain user OAuth token from Looker')
-        }
-      }
-      
-      // Ensure we have a Google OAuth token for API authorization
-      if (!googleOAuthToken) {
-        throw new Error('Google OAuth token is required but not available')
-      }
-
+      // Prepare the request body for CA API
       const requestBody = {
         project: VERTEX_PROJECT,
         messages: [
@@ -199,21 +107,71 @@ const useConversationalAnalytics = () => {
                   explore: currentExplore.exploreId,
                 },
               ],
-              credentials: {
-                oauth: {
-                  token: {
-                    access_token: lookerUserToken,
-                  },
-                },
-              },
             },
+          },
+        },
+      };
+
+      // Try to route through MCP server first (recommended approach)
+      const mcpServerUrl = settings['mcp_server_url']?.value as string;
+      if (mcpServerUrl && oauth2Token) {
+        try {
+          console.log('Routing CA API call through MCP server...');
+
+          const mcpResponse = await fetch(`${mcpServerUrl}/mcp/conversational-analytics`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${oauth2Token}`
+            },
+            body: JSON.stringify(requestBody)
+          });
+
+          if (mcpResponse.ok) {
+            const responseData = await mcpResponse.json();
+            console.log('CA API call via MCP server successful');
+            return responseData;
+          } else {
+            const errorText = await mcpResponse.text();
+            console.warn('MCP server CA API call failed, falling back to direct call:', errorText);
+          }
+        } catch (mcpError) {
+          console.warn('MCP server unavailable for CA API, falling back to direct call:', mcpError);
+        }
+      }
+
+      // Fallback: Direct CA API call (requires proper tokens)
+      console.log('Falling back to direct CA API call...')
+      
+      // Get OAuth token and Looker user token
+      let googleOAuthToken = oauth2Token
+      let lookerUserToken = null
+      
+      // Fallback: get the user-specific OAuth token via Looker SDK if not from MCP
+      if (!lookerUserToken) {
+        lookerUserToken = await getLookerUserToken()
+        if (!lookerUserToken) {
+          throw new Error('Failed to obtain user OAuth token from Looker')
+        }
+      }
+      
+      // Ensure we have a Google OAuth token for API authorization
+      if (!googleOAuthToken) {
+        throw new Error('Google OAuth token is required but not available')
+      }
+
+      // Add Looker credentials to the request body
+      (requestBody.inlineContext.datasource_references.looker as any).credentials = {
+        oauth: {
+          token: {
+            access_token: lookerUserToken,
           },
         },
       };
 
       const endpoint = `https://geminidataanalytics.googleapis.com/v1alpha/projects/${VERTEX_PROJECT}/locations/${VERTEX_LOCATION}:chat`;
       
-      console.log(`Making ConversationalAnalytics request to: ${endpoint}`);
+      console.log(`Making direct ConversationalAnalytics request to: ${endpoint}`);
       
       const response = await fetch(endpoint, {
         method: 'POST',
