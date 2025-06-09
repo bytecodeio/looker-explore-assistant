@@ -47,7 +47,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     try {
       // Get user attribute values (only for metadata like IDs)
       const myUserId = await core40SDK.ok(core40SDK.me());
-      console.log('myUserId:', myUserId)
 
       const userAttributeValues = await core40SDK.ok(
         core40SDK.user_attribute_user_values({
@@ -57,8 +56,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
         })
       );
       
-      console.log('userAttributeValues for metadata:', userAttributeValues.length);
-
       // Only store metadata for saving, don't update settings (they're loaded globally)
       setUserAttributes(userAttributeValues.map((attr: any) => ({ 
         id: attr.user_attribute_id, 
@@ -87,19 +84,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
       if (existingToken) {
         const tokenInfo = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + existingToken);
         if (tokenInfo.ok) {
-          console.log('Existing OAuth token is valid');
           return true;
         }
       }
 
       // Skip if already authenticating
       if (isAuthenticating) {
-        console.log('OAuth flow already in progress, skipping duplicate request');
         return false;
       }
 
       const clientId = settings['google_oauth_client_id']?.value as string;
-      console.log('Starting OAuth flow with client ID:', clientId);
 
       // Clear any previous error and set authenticating state
       dispatch(setOAuthError(null));
@@ -117,22 +111,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
       const { access_token } = response;
       if (access_token) {
         dispatch(setSetting({ id: 'oauth2_token', value: access_token }));
-        console.log('OAuth token obtained successfully');
         return true;
       }
-      console.error('No access token received from OAuth flow');
       dispatch(setOAuthError('Failed to receive access token from OAuth flow'));
       return false;
     } catch (error) {
-      console.error('OAuth2 authentication failed:', error);
       dispatch(setOAuthError(`OAuth authentication failed: ${error.message || 'Unknown error'}`));
       return false;
     } finally {
       dispatch(setOAuthAuthenticating(false));
     }
   }
-
-  // No longer automatically running OAuth on component mount
 
   // Load user attribute metadata once when component mounts (for saving functionality)
   useEffect(() => {
@@ -169,8 +158,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
         const response: any = await core40SDK.ok(core40SDK.me())
         
         let adminStatus = false
-        console.log('debugging admin status check')
-        console.log('Current user response:', response)
         
         // First, get the actual admin role ID by searching for roles with name 'admin'
         let adminRoleId: string | null = null
@@ -178,11 +165,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
           const adminRoles = await core40SDK.ok(core40SDK.search_roles({
             name: 'admin'
           }))
-          console.log('Admin roles found:', adminRoles)
           
           if (adminRoles && adminRoles.length > 0) {
             adminRoleId = adminRoles[0].id || null
-            console.log('Admin role ID found:', adminRoleId)
           }
         } catch (roleError) {
           console.warn('Could not fetch admin role:', roleError)
@@ -192,39 +177,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
         // 1. Check is_iam_admin if it exists and is false, but still continue to role check
         if (typeof response.is_iam_admin === 'boolean') {
           adminStatus = response.is_iam_admin
-          console.log('Admin status from is_iam_admin:', adminStatus)
         }
-        
+
         // 2. Always check role_ids for admin role (even if is_iam_admin is false)
         if (Array.isArray(response.role_ids)) {
-          console.log('User role_ids:', response.role_ids)
-          
           // Check against the dynamically fetched admin role ID
           if (adminRoleId && (response.role_ids.includes(adminRoleId) || response.role_ids.includes(parseInt(adminRoleId)))) {
             adminStatus = true
-            console.log('Admin status determined by role_ids containing admin role ID:', adminRoleId)
           }
-          // Fallback: check for role ID 2 (traditional admin role)
-          else if (response.role_ids.includes('2') || response.role_ids.includes(2)) {
-            adminStatus = true
-            console.log('Admin status determined by role_ids containing role ID 2:', response.role_ids)
-          }
-        }
-        
-        // 3. Final check: if we have an admin role ID but no role_ids array, check permissions differently
-        if (!adminStatus && adminRoleId) {
-          console.log('Checking admin status via admin role ID without role_ids array')
-          // Additional check could be implemented here if needed
-        }
-        
-        if (!adminStatus) {
-          console.warn('Unable to determine admin status')
-          console.log('Available user properties:', Object.keys(response))
-          console.log('is_iam_admin:', response.is_iam_admin)
-          console.log('role_ids:', response.role_ids)
-          console.log('Admin role ID found:', adminRoleId)
-        } else {
-          console.log('Final admin status:', adminStatus)
         }
         
         setIsAdmin(adminStatus)
@@ -251,7 +211,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
   // Handle saving settings to user attributes
   const handleSaveSetting = async (id: string, value: string) => {
     // Only persist specific settings
-    if (!['vertex_project', 'vertex_location', 'vertex_model', 'google_oauth_client_id', 'bigquery_example_looker_model_name'].includes(id)) {
+    if (!['vertex_project', 'vertex_location', 'vertex_model', 'google_oauth_client_id', 'bigquery_example_looker_model_name', 'mcp_server_url', 'mcp_shared_secret'].includes(id)) {
       dispatch(setSetting({ id, value }));
       return;
     }
@@ -264,7 +224,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
       const userAttribute = userAttributes.find(
         (attr) => attr.name.toLowerCase() === prefixedId
       )
-      console.log('userAttribute:', userAttribute, 'for name:', prefixedId)
       if (userAttribute) {
         await core40SDK.ok(
           core40SDK.update_user_attribute(userAttribute.id || '', {
@@ -329,7 +288,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     id === 'vertex_location' || 
     id === 'vertex_model' ||
     id === 'google_oauth_client_id' ||
-    id === 'bigquery_example_looker_model_name'
+    id === 'bigquery_example_looker_model_name' ||
+    id === 'mcp_server_url' ||
+    id === 'mcp_shared_secret'
   )
 
   return (

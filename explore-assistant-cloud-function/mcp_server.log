@@ -1,0 +1,39 @@
+nohup: ignoring input
+ * Serving Flask app 'mcp_server'
+ * Debug mode: on
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8001
+ * Running on http://172.23.99.89:8001
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with watchdog (inotify)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 101-745-114
+INFO:werkzeug: * Detected change in '/home/colin/looker-explore-assistant/explore-assistant-cloud-function/test_mcp_auth.py', reloading
+INFO:werkzeug: * Detected change in '/home/colin/looker-explore-assistant/explore-assistant-cloud-function/test_mcp_auth.py', reloading
+INFO:werkzeug:127.0.0.1 - - [07/Jun/2025 23:26:54] "GET /mcp/health HTTP/1.1" 200 -
+INFO:root:Signature validation: received=e49aaa3e3dda198c4f82cad8faa7010258e12b8da433718fa92339216e4f48a3, expected=e49aaa3e3dda198c4f82cad8faa7010258e12b8da433718fa92339216e4f48a3
+INFO:root:Request data: {"sessionInfo":{"userId":"test_user_123","lookerHost":"https://test.looker.com","timestamp":1749360414431,"extensionId":"explore-assistant"}}
+INFO:root:Request data length: 141
+INFO:werkzeug: * Restarting with watchdog (inotify)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 101-745-114
+INFO:werkzeug: * Detected change in '/home/colin/looker-explore-assistant/explore-assistant-cloud-function/test_mcp_auth.py', reloading
+INFO:werkzeug: * Detected change in '/home/colin/looker-explore-assistant/explore-assistant-cloud-function/test_mcp_auth.py', reloading
+INFO:werkzeug:127.0.0.1 - - [07/Jun/2025 23:30:34] "GET /mcp/health HTTP/1.1" 200 -
+INFO:root:Signature validation: received=0c804841340ceb05504b389ef16b5f653bc42a3be7810367095afe88ab1e31a2, expected=0c804841340ceb05504b389ef16b5f653bc42a3be7810367095afe88ab1e31a2
+INFO:root:Request data: {"sessionInfo":{"userId":"test_user_123","lookerHost":"https://test.looker.com","timestamp":1749360634105,"extensionId":"explore-assistant"}}
+INFO:root:Request data length: 141
+INFO:werkzeug: * Restarting with watchdog (inotify)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 101-745-114
+INFO:werkzeug: * Detected change in '/home/colin/looker-explore-assistant/explore-assistant-cloud-function/mcp_server.py', reloading
+INFO:werkzeug: * Detected change in '/home/colin/looker-explore-assistant/explore-assistant-cloud-function/mcp_server.py', reloading
+INFO:werkzeug: * Restarting with watchdog (inotify)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 101-745-114
+INFO:werkzeug: * Detected change in '/home/colin/looker-explore-assistant/explore-assistant-cloud-function/mcp_server.py', reloading
+INFO:werkzeug: * Detected change in '/home/colin/looker-explore-assistant/explore-assistant-cloud-function/mcp_server.py', reloading
+INFO:werkzeug: * Restarting with watchdog (inotify)
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 101-745-114

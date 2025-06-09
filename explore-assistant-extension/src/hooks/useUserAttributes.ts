@@ -75,7 +75,9 @@ export const useUserAttributes = () => {
              settingKey === 'vertex_location' || 
              settingKey === 'vertex_model' ||
              settingKey === 'google_oauth_client_id' ||
-             settingKey === 'bigquery_example_looker_model_name') && 
+             settingKey === 'bigquery_example_looker_model_name' ||
+             settingKey === 'mcp_server_url' ||
+             settingKey === 'mcp_shared_secret') && 
             value && 
             settings[settingKey]
           ) {

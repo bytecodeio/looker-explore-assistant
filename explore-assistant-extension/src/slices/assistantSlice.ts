@@ -224,7 +224,17 @@ export const initialState: AssistantState = {
       name: 'Vertex AI Model',
       description: 'Vertex AI model to use (e.g., gemini-2.0-flash)',
       value: 'gemini-2.0-flash',
-    }
+    },
+    mcp_server_url: {
+      name: 'MCP Server URL',
+      description: 'URL of the Model Context Protocol server for credential proxying',
+      value: '',
+    },
+    mcp_shared_secret: {
+      name: 'MCP Shared Secret',
+      description: 'Shared secret for authenticating requests to the MCP server',
+      value: '',
+    },
   },
   isBigQueryMetadataLoaded: false,
   isSemanticModelLoaded: false,

@@ -19,10 +19,36 @@ const useConversationalAnalytics = () => {
   // Get Looker instance URI from the extension context
   const lookerInstanceUri = lookerHostData?.hostUrl || ''
 
-  // Function to get the user-specific OAuth token via Looker SDK
+  // Helper function to generate MCP request signature
+  const generateMCPSignature = useCallback(async (data: any): Promise<string> => {
+    const mcpSecret = settings['mcp_shared_secret']?.value as string || ''
+    const message = JSON.stringify(data)
+    
+    // Use Web Crypto API to generate HMAC-SHA256 signature
+    const encoder = new TextEncoder()
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(mcpSecret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    )
+    
+    const signature = await crypto.subtle.sign(
+      'HMAC',
+      key,
+      encoder.encode(message)
+    )
+    
+    return Array.from(new Uint8Array(signature))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+  }, [settings])
+
+  // Function to get the user-specific OAuth token via MCP server or fallback to Looker SDK
   const getLookerUserToken = useCallback(async (): Promise<string | null> => {
     try {
-      // Get current user ID
+      // Get current user info
       const currentUser = await core40SDK.ok(core40SDK.me())
       const userId = currentUser.id
       
@@ -32,20 +58,59 @@ const useConversationalAnalytics = () => {
       
       console.log('Getting login token for user ID:', userId)
       
-      // Call login_user to get the user-specific OAuth token
-      const loginResponse = await core40SDK.ok(core40SDK.login_user(userId))
+      // First, try MCP server token exchange if available
+      const mcpServerUrl = settings['mcp_server_url']?.value as string
+      if (mcpServerUrl) {
+        try {
+          console.log('Attempting MCP server token exchange...')
+          
+          const sessionInfo = {
+            userId,
+            lookerHost: lookerHostData?.hostUrl,
+            timestamp: Date.now(),
+            extensionId: lookerHostData?.extensionId
+          }
+          
+          const mcpResponse = await fetch(`${mcpServerUrl}/mcp/token-exchange`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Signature': await generateMCPSignature(sessionInfo)
+            },
+            body: JSON.stringify({ sessionInfo })
+          })
+          
+          if (mcpResponse.ok) {
+            const tokenData = await mcpResponse.json()
+            console.log('Successfully obtained token via MCP server')
+            return tokenData.tokens.looker_access_token
+          } else {
+            console.warn('MCP server token exchange failed, falling back to direct method')
+          }
+        } catch (mcpError) {
+          console.warn('MCP server unavailable, falling back to direct method:', mcpError)
+        }
+      }
       
-      if (loginResponse.access_token) {
-        console.log('Successfully obtained user login token')
-        return loginResponse.access_token
-      } else {
-        throw new Error('No access token returned from login_user')
+      // Fallback to direct Looker SDK call (requires admin privileges)
+      try {
+        const loginResponse = await core40SDK.ok(core40SDK.login_user(userId))
+        
+        if (loginResponse.access_token) {
+          console.log('Successfully obtained user login token via direct method')
+          return loginResponse.access_token
+        } else {
+          throw new Error('No access token returned from login_user')
+        }
+      } catch (directError) {
+        console.error('Direct login_user failed (user may not have admin privileges):', directError)
+        throw new Error('Unable to obtain user token - MCP server required for non-admin users')
       }
     } catch (error) {
       console.error('Error getting Looker user token:', error)
       return null
     }
-  }, [core40SDK])
+  }, [core40SDK, settings, lookerHostData])
 
   const callConversationalAnalyticsAPI = useCallback(async (
     prompt: string,
@@ -62,10 +127,56 @@ const useConversationalAnalytics = () => {
         throw new Error('Looker instance URI is required but not provided');
       }
 
-      // Get the user-specific OAuth token via Looker SDK
-      const userToken = await getLookerUserToken()
-      if (!userToken) {
-        throw new Error('Failed to obtain user OAuth token from Looker')
+      // Get OAuth token (either from MCP server or settings)
+      let googleOAuthToken = oauth2Token
+      let lookerUserToken = null
+      
+      const mcpServerUrl = settings['mcp_server_url']?.value as string
+      if (mcpServerUrl) {
+        try {
+          console.log('Attempting to get tokens via MCP server...')
+          
+          const currentUser = await core40SDK.ok(core40SDK.me())
+          const sessionInfo = {
+            userId: currentUser.id,
+            lookerHost: lookerInstanceUri,
+            timestamp: Date.now(),
+            extensionId: lookerHostData?.extensionId
+          }
+          
+          const mcpResponse = await fetch(`${mcpServerUrl}/mcp/token-exchange`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Signature': await generateMCPSignature(sessionInfo)
+            },
+            body: JSON.stringify({ sessionInfo })
+          })
+          
+          if (mcpResponse.ok) {
+            const tokenData = await mcpResponse.json()
+            googleOAuthToken = tokenData.tokens.google_oauth_token
+            lookerUserToken = tokenData.tokens.looker_access_token
+            console.log('Successfully obtained tokens via MCP server')
+          } else {
+            console.warn('MCP server token exchange failed, using fallback tokens')
+          }
+        } catch (mcpError) {
+          console.warn('MCP server unavailable, using fallback tokens:', mcpError)
+        }
+      }
+      
+      // Fallback: get the user-specific OAuth token via Looker SDK if not from MCP
+      if (!lookerUserToken) {
+        lookerUserToken = await getLookerUserToken()
+        if (!lookerUserToken) {
+          throw new Error('Failed to obtain user OAuth token from Looker')
+        }
+      }
+      
+      // Ensure we have a Google OAuth token for API authorization
+      if (!googleOAuthToken) {
+        throw new Error('Google OAuth token is required but not available')
       }
 
       const requestBody = {
@@ -91,7 +202,7 @@ const useConversationalAnalytics = () => {
               credentials: {
                 oauth: {
                   token: {
-                    access_token: userToken,
+                    access_token: lookerUserToken,
                   },
                 },
               },
@@ -108,7 +219,7 @@ const useConversationalAnalytics = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${oauth2Token}`
+          'Authorization': `Bearer ${googleOAuthToken}`
         },
         body: JSON.stringify(requestBody)
       });

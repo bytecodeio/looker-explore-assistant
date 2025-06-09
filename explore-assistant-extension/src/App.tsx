@@ -14,9 +14,6 @@ import SettingsModal from './pages/AgentPage/Settings'
 import ConnectionBanner from './components/Banner/ConnectionBanner'  // Import the new banner
 import { Box, CircularProgress, Typography, Button } from '@material-ui/core'
 
-// Debug flag for OAuth flow
-const AUTH_DEBUG = true
-
 const ExploreApp = () => {
   const dispatch = useDispatch()
   const { settings, bigQueryTestSuccessful, vertexTestSuccessful, oauth, userAttributesLoaded, initialTestsCompleted } = useSelector((state: RootState) => state.assistant) as any
@@ -54,23 +51,9 @@ const ExploreApp = () => {
   // NEW INITIALIZATION FLOW: User attributes → Tests → Conditional settings modal
   useEffect(() => {
     const runInitialTests = async () => {
-      if (!userAttributesLoaded || initialTestsCompleted) {
-        if (AUTH_DEBUG) {
-          console.log('Skipping tests: userAttributesLoaded=', userAttributesLoaded, 'initialTestsCompleted=', initialTestsCompleted)
-        }
-        return
-      }
 
       testsRunCounter.current++
-      
-      if (AUTH_DEBUG) {
-        console.log('===== Initial App Test Execution =====')
-        console.log('Tests run count:', testsRunCounter.current)
-        console.log('User attributes loaded:', userAttributesLoaded)
-        console.log('BigQuery test status:', bigQueryTestSuccessful)
-        console.log('Vertex test status:', vertexTestSuccessful)
-      }
-      
+
       // Validate existing token before running tests
       const existingToken = settings['oauth2_token']?.value;
       
@@ -78,41 +61,28 @@ const ExploreApp = () => {
         lastCheckedToken.current = existingToken
         tokenValidationCounter.current++
         
-        if (AUTH_DEBUG) {
-          console.log('Token validation attempt #', tokenValidationCounter.current)
-        }
+      
         
         try {
           const tokenInfo = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + existingToken);
-          if (AUTH_DEBUG) {
-            console.log('Token validation status:', tokenInfo.status)
-          }
-          
+      
           if (!tokenInfo.ok) {
             console.error('Existing OAuth token is invalid during initial tests');
             // Don't open settings modal here - let the tests fail and then decide
-          } else if (AUTH_DEBUG) {
-            const tokenData = await tokenInfo.clone().json();
-            console.log('Valid token expires in:', tokenData.expires_in, 'seconds')
-          }
+          } 
         } catch (error) {
-          AUTH_DEBUG && console.log('Error validating token in App component:', error)
+          console.log('Error validating token in App component:', error)
           // Don't open settings modal here - let the tests fail and then decide
         }
-      } else if (AUTH_DEBUG) {
-        console.log('No token available for initial tests')
       }
 
-      AUTH_DEBUG && console.log('Running initial BQ and Vertex tests...')
       await testBigQuerySettings();
       await testVertexSettings();
       
       // Mark initial tests as completed
       dispatch(setInitialTestsCompleted(true))
       
-      if (AUTH_DEBUG) {
-        console.log('Initial tests completed. Results - BQ:', bigQueryTestSuccessful, 'Vertex:', vertexTestSuccessful)
-      }
+      
     };
 
     runInitialTests();
@@ -132,18 +102,8 @@ const ExploreApp = () => {
 
     const testsHaveFailed = !bigQueryTestSuccessful || !vertexTestSuccessful
 
-    if (AUTH_DEBUG) {
-      console.log('===== Settings Modal Decision =====')
-      console.log('User attributes loaded:', userAttributesLoaded)
-      console.log('Initial tests completed:', initialTestsCompleted)
-      console.log('Tests have failed:', testsHaveFailed)
-      console.log('Has critical missing settings:', hasCriticalMissingSettings)
-      console.log('Current settings modal state:', isSettingsOpen)
-    }
-
     if (testsHaveFailed && hasCriticalMissingSettings && !isSettingsOpen) {
-      AUTH_DEBUG && console.log('Opening settings modal due to failed tests and missing critical configuration')
-      setIsSettingsOpen(true)
+       setIsSettingsOpen(true)
     }
   }, [userAttributesLoaded, initialTestsCompleted, bigQueryTestSuccessful, vertexTestSuccessful, settings, isSettingsOpen]);
 
@@ -154,7 +114,6 @@ const ExploreApp = () => {
         <SettingsModal
           open={isSettingsOpen}
           onClose={() => {
-            AUTH_DEBUG && console.log('Settings modal closed')
             setIsSettingsOpen(false)
             setShowFallbackUI(false)
           }}
@@ -185,7 +144,6 @@ const ExploreApp = () => {
 
   // Show loading state while user attributes are being loaded
   if (isLoadingUserAttributes || !userAttributesLoaded) {
-    AUTH_DEBUG && console.log('Showing user attributes loading indicator')
     return (
       <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
         <CircularProgress />
@@ -195,7 +153,6 @@ const ExploreApp = () => {
   }
 
   if (isAuthenticating) {
-    AUTH_DEBUG && console.log('Showing authentication progress indicator')
     return (
       <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
         <CircularProgress />
@@ -203,8 +160,7 @@ const ExploreApp = () => {
       </Box>
     )
   }
-  AUTH_DEBUG && console.log('Rendering main app view. Settings open:', isSettingsOpen, 'BQ/Vertex tests successful:', bigQueryTestSuccessful, vertexTestSuccessful)
-
+ 
   // Always show banner initially since we're not using localStorage anymore
   const bannerInitialState = true
 
@@ -213,7 +169,6 @@ const ExploreApp = () => {
       <SettingsModal
         open={isSettingsOpen}
         onClose={() => {
-          AUTH_DEBUG && console.log('Settings modal closed')
           setIsSettingsOpen(false)
         }}
       />
