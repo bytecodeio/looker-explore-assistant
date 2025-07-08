@@ -115,28 +115,21 @@ const ExploreApp = () => {
       const bqResult = await testBigQuerySettings();
       console.log('BigQuery test result:', bqResult)
       
-      // Run Cloud Run test only if URL is configured
+      // Run Cloud Run test only if URL is configured and not already successful
       let cloudRunResult = true; // Default to true if no URL configured
       const cloudRunUrl = settings['cloud_run_service_url']?.value
-      const hasOAuthToken = !!settings['oauth2_token']?.value
-      
-      console.log('Cloud Run URL check:', cloudRunUrl || 'NOT SET')
-      console.log('OAuth token check:', hasOAuthToken ? 'AVAILABLE' : 'NOT AVAILABLE')
-      
+
       if (cloudRunUrl) {
-        console.log('Starting Cloud Run test...')
-        console.log('Will test URL:', cloudRunUrl)
-        console.log('Using OAuth token:', hasOAuthToken)
-        
-        cloudRunResult = await testCloudRunSettings();
-        console.log('Cloud Run test result:', cloudRunResult)
-        
-        // Update Redux state with Cloud Run test result
-        dispatch(setVertexTestSuccessful(cloudRunResult))
-        console.log('Dispatched setVertexTestSuccessful:', cloudRunResult)
+        if (!vertexTestSuccessful) {
+          console.log('Starting Cloud Run test...')
+          cloudRunResult = await testCloudRunSettings();
+          dispatch(setVertexTestSuccessful(cloudRunResult))
+          console.log('Dispatched setVertexTestSuccessful:', cloudRunResult)
+        } else {
+          cloudRunResult = true
+          console.log('Cloud Run test already successful, skipping')
+        }
       } else {
-        console.log('Cloud Run URL not configured, skipping Cloud Run test')
-        // If no URL configured, consider it as "passed" since it's optional
         dispatch(setVertexTestSuccessful(true))
         console.log('Dispatched setVertexTestSuccessful: true (no URL configured)')
       }
@@ -151,7 +144,16 @@ const ExploreApp = () => {
     };
 
     runInitialTests();
-  }, [userAttributesLoaded, initialTestsCompleted, testBigQuerySettings, testCloudRunSettings, settings['cloud_run_service_url']?.value, settings['oauth2_token']?.value, dispatch]);
+  }, [
+    userAttributesLoaded,
+    initialTestsCompleted,
+    testBigQuerySettings,
+    testCloudRunSettings,
+    settings['cloud_run_service_url']?.value,
+    settings['oauth2_token']?.value,
+    dispatch,
+    vertexTestSuccessful // <-- add this dependency
+  ]);
 
   // CONDITIONAL SETTINGS MODAL: Only open if tests fail due to missing critical configuration
   useEffect(() => {

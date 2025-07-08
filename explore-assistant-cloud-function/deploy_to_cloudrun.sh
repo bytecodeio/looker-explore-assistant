@@ -19,6 +19,22 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}Starting deployment of Looker Explore Assistant MCP Server to Google Cloud Run${NC}"
 
+# Load environment variables from .env file if it exists
+if [ -f ".env" ]; then
+    echo -e "${YELLOW}Loading environment variables from .env file...${NC}"
+    # Export variables from .env file, filtering out comments and empty lines
+    export $(grep -v '^#' .env | grep -v '^$' | xargs)
+    echo -e "${GREEN}Environment variables loaded successfully${NC}"
+else
+    echo -e "${YELLOW}No .env file found, using default values${NC}"
+fi
+
+# Override PROJECT_ID from .env if available
+if [ ! -z "$PROJECT" ]; then
+    PROJECT_ID="$PROJECT"
+    echo -e "${GREEN}Using PROJECT_ID from .env: $PROJECT_ID${NC}"
+fi
+
 # Function to check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
@@ -91,18 +107,17 @@ gcloud run deploy $SERVICE_NAME \
     --concurrency 100 \
     --min-instances 0 \
     --max-instances 10 \
-    --set-env-vars "PROJECT=$PROJECT_ID" \
-    --set-env-vars "REGION=$REGION" \
-    --set-env-vars "VERTEX_MODEL=gemini-2.0-flash-001" \
-    --set-env-vars "LOG_LEVEL=INFO" \
-    --set-env-vars "FLASK_ENV=production" \
-    --set-env-vars "MCP_SHARED_SECRET=PLACEHOLDER_REPLACE_WITH_SECURE_SECRET" \
-    --set-env-vars "LOOKER_API_CLIENT_ID=PLACEHOLDER_YOUR_LOOKER_CLIENT_ID" \
-    --set-env-vars "LOOKER_API_CLIENT_SECRET=PLACEHOLDER_YOUR_LOOKER_CLIENT_SECRET" \
-    --set-env-vars "LOOKER_BASE_URL=PLACEHOLDER_YOUR_LOOKER_BASE_URL" \
-    --set-env-vars "LOOKERSDK_CLIENT_ID=PLACEHOLDER_YOUR_LOOKER_CLIENT_ID" \
-    --set-env-vars "LOOKERSDK_CLIENT_SECRET=PLACEHOLDER_YOUR_LOOKER_CLIENT_SECRET" \
-    --set-env-vars "LOOKERSDK_VERIFY_SSL=true" \
+    --set-env-vars "PROJECT=${PROJECT:-$PROJECT_ID}" \
+    --set-env-vars "REGION=${REGION:-us-central1}" \
+    --set-env-vars "VERTEX_MODEL=${VERTEX_MODEL:-gemini-2.0-flash-001}" \
+    --set-env-vars "LOOKERSDK_BASE_URL=${LOOKERSDK_BASE_URL}" \
+    --set-env-vars "LOOKERSDK_CLIENT_ID=${LOOKERSDK_CLIENT_ID}" \
+    --set-env-vars "LOOKERSDK_CLIENT_SECRET=${LOOKERSDK_CLIENT_SECRET}" \
+    --set-env-vars "LOOKERSDK_VERIFY_SSL=${LOOKERSDK_VERIFY_SSL:-true}" \
+    --set-env-vars "LOOKERSDK_TIMEOUT=${LOOKERSDK_TIMEOUT:-120}" \
+    --set-env-vars "BQ_PROJECT_ID=${BQ_PROJECT_ID:-$PROJECT_ID}" \
+    --set-env-vars "BQ_DATASET_ID=${BQ_DATASET_ID:-explore_assistant}" \
+    --set-env-vars "BQ_SUGGESTED_TABLE=${BQ_SUGGESTED_TABLE:-silver_queries}" \
     --quiet
 
 # Get the service URL
@@ -111,17 +126,23 @@ SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region=$REGION --form
 echo -e "${GREEN}Deployment completed successfully!${NC}"
 echo -e "${GREEN}Service URL: $SERVICE_URL${NC}"
 echo ""
-echo -e "${YELLOW}Next steps:${NC}"
-echo "1. Update the environment variables with your actual values:"
-echo "   gcloud run services update $SERVICE_NAME --region=$REGION --set-env-vars KEY=VALUE"
+echo -e "${YELLOW}Configuration:${NC}"
+echo "Environment variables were loaded from .env file and deployed to Cloud Run"
 echo ""
-echo "2. Required environment variables to update:"
-echo "   - MCP_SHARED_SECRET: Replace with a secure secret"
-echo "   - LOOKER_API_CLIENT_ID: Your Looker API client ID"
-echo "   - LOOKER_API_CLIENT_SECRET: Your Looker API client secret"
-echo "   - LOOKER_BASE_URL: Your Looker instance URL"
-echo "   - LOOKERSDK_CLIENT_ID: Same as LOOKER_API_CLIENT_ID"
-echo "   - LOOKERSDK_CLIENT_SECRET: Same as LOOKER_API_CLIENT_SECRET"
+echo "Deployed environment variables:"
+echo "  - PROJECT: ${PROJECT:-$PROJECT_ID}"
+echo "  - REGION: ${REGION:-us-central1}"
+echo "  - VERTEX_MODEL: ${VERTEX_MODEL:-gemini-2.0-flash-001}"
+echo "  - LOOKERSDK_BASE_URL: ${LOOKERSDK_BASE_URL}"
+echo "  - LOOKERSDK_CLIENT_ID: ${LOOKERSDK_CLIENT_ID}"
+echo "  - LOOKERSDK_VERIFY_SSL: ${LOOKERSDK_VERIFY_SSL:-true}"
+echo "  - BQ_PROJECT_ID: ${BQ_PROJECT_ID:-$PROJECT_ID}"
+echo "  - BQ_DATASET_ID: ${BQ_DATASET_ID:-explore_assistant}"
+echo "  - BQ_SUGGESTED_TABLE: ${BQ_SUGGESTED_TABLE:-silver_queries}"
+echo ""
+echo -e "${YELLOW}To update environment variables:${NC}"
+echo "1. Edit the .env file with your desired values"
+echo "2. Re-run this deployment script to apply changes"
 echo ""
 echo "3. Test the deployment:"
 echo "   curl $SERVICE_URL/health"

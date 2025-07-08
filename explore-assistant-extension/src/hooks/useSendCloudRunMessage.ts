@@ -33,30 +33,9 @@ const useSendCloudRunMessage = () => {
     console.log('Making request to Cloud Run service using Identity token...')
     console.log('Request URL:', CLOUD_RUN_URL)
     console.log('Payload keys:', Object.keys(payload))
-    
+
     try {
-      // First, let's try a simple request that won't trigger CORS preflight
-      // Use text/plain content type to avoid preflight for testing
-      console.log('Attempting simple CORS request without preflight...')
-      
-      const simpleResponse = await fetch(CLOUD_RUN_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain', // This avoids CORS preflight
-        },
-        body: JSON.stringify(payload),
-        mode: 'cors',
-      })
-      
-      if (simpleResponse.ok) {
-        console.log('Simple CORS request successful (no auth needed)')
-        return await simpleResponse.json()
-      } else {
-        console.log('Simple CORS failed, trying with auth...')
-      }
-      
-      // If simple request fails, try fetchProxy with identity token
-      console.log('Trying fetchProxy with authentication...')
+      // Always send Authorization header, even for the first attempt
       const response = await extensionSDK.fetchProxy(CLOUD_RUN_URL, {
         method: 'POST',
         headers: {
@@ -65,46 +44,19 @@ const useSendCloudRunMessage = () => {
         },
         body: JSON.stringify(payload),
       })
-      
+
       console.log('Cloud Run API response received via fetchProxy:', typeof response)
       return response
     } catch (error) {
       console.error('All requests failed:', error)
-      console.error('Error details:', JSON.stringify(error, null, 2))
-      
-      // Last resort: try with proper auth headers
-      console.log('Final attempt: direct fetch with proper CORS and auth...')
-      try {
-        const response = await fetch(CLOUD_RUN_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${identityToken}`,
-          },
-          body: JSON.stringify(payload),
-          mode: 'cors',
-          credentials: 'omit', // Don't send cookies to avoid additional preflight
-        })
+      throw new Error(`Unable to connect to Cloud Run service:
+        Error: ${error}
         
-        if (!response.ok) {
-          const errorText = await response.text()
-          throw new Error(`Final fetch error: ${response.status} ${response.statusText} - ${errorText}`)
-        }
-        
-        console.log('Final direct fetch successful')
-        return await response.json()
-      } catch (finalError) {
-        console.error('All connection attempts failed:', finalError)
-        
-        throw new Error(`Unable to connect to Cloud Run service:
-          Error: ${finalError}
-          
-          Troubleshooting steps:
-          1. Check that your Cloud Run URL is correct: ${CLOUD_RUN_URL}
-          2. Verify your OAuth token is valid
-          3. Ensure Cloud Run service is accepting requests
-          4. Check Cloud Run logs for authentication errors`)
-      }
+        Troubleshooting steps:
+        1. Check that your Cloud Run URL is correct: ${CLOUD_RUN_URL}
+        2. Verify your OAuth token is valid
+        3. Ensure Cloud Run service is accepting requests
+        4. Check Cloud Run logs for authentication errors`)
     }
   }
 

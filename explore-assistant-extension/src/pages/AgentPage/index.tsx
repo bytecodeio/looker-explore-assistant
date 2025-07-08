@@ -135,17 +135,30 @@ const AgentPage = () => {
     
     try {
       // SINGLE CALL to Cloud Run service
-      const response = await processPrompt(query, conversationId, promptList)
-      
+      let response = await processPrompt(query, conversationId, promptList)
+
+      // If response is a Response object, parse as JSON
+      if (response && typeof response.json === 'function') {
+        response = await response.json()
+      }
+
       console.log('Cloud Run response:', response)
-      
+
+      // If response has a 'body' property, use it as the actual data
+      const data = response && response.body ? response.body : response
+
+      // Defensive: ensure data is an object
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid response from Cloud Run')
+      }
+
       // Handle explore determination from response
       let exploreKey = currentExplore.exploreKey
       console.log('Current explore before processing:', currentExplore)
-      console.log('Response explore_key:', response.explore_key)
+      console.log('Response explore_key:', response.body.explore_key)
       
-      const needsExploreUpdate = response.explore_key && (
-        response.explore_key !== exploreKey || 
+      const needsExploreUpdate = response.body.explore_key && (
+        response.body.explore_key !== exploreKey || 
         !currentExplore.modelName || 
         !currentExplore.exploreId
       )
@@ -153,7 +166,7 @@ const AgentPage = () => {
       console.log('Needs explore update?', needsExploreUpdate)
       
       if (needsExploreUpdate) {
-        exploreKey = response.explore_key
+        exploreKey = response.body.explore_key
         console.log('Setting new explore from response.explore_key:', exploreKey)
         console.log('Current explore state before update:', currentExplore)
         
@@ -191,35 +204,35 @@ const AgentPage = () => {
       // Update thread with response data
       dispatch(
         updateCurrentThread({
-          exploreParams: response.explore_params || {},
-          summarizedPrompt: response.summarized_prompt || query,
+          exploreParams: response.body.explore_params || {},
+          summarizedPrompt: response.body.summarized_prompt || query,
         }),
       )
 
       // Add appropriate message based on response type
-      const messageType = response.message_type || 'explore'
-      
+      const messageType = response.body.message_type || 'explore'
+
       if (messageType === 'summarize') {
         dispatch(
           addMessage({
-            exploreParams: response.explore_params || {},
+            exploreParams: response.body.explore_params || {},
             uuid: uuidv4(),
             actor: 'system',
             createdAt: Date.now(),
-            summary: response.summary || '',
+            summary: response.body.summary || '',
             type: 'summarize',
           }),
         )
       } else {
         // Default to explore message
-        dispatch(setSidePanelExploreParams(response.explore_params || {}))
+        dispatch(setSidePanelExploreParams(response.body.explore_params || {}))
         dispatch(openSidePanel())
 
         dispatch(
           addMessage({
-            exploreParams: response.explore_params || {},
+            exploreParams: response.body.explore_params || {},
             uuid: uuidv4(),
-            summarizedPrompt: response.summarized_prompt || query,
+            summarizedPrompt: response.body.summarized_prompt || query,
             actor: 'system',
             createdAt: Date.now(),
             type: 'explore',
@@ -267,6 +280,10 @@ const AgentPage = () => {
     setExpanded(!expanded)
   }
 
+  useEffect(() => {
+    console.log('agent ready? checking BQ and Semantic Model',  isBigQueryMetadataLoaded, isSemanticModelLoaded)
+  }, [isBigQueryMetadataLoaded, isSemanticModelLoaded])
+
   const handleExploreChange = (event: SelectChangeEvent) => {
     const exploreKey = event.target.value
     const [modelName, exploreId] = exploreKey.split(':')
@@ -300,8 +317,6 @@ const AgentPage = () => {
 
   const isAgentReady = isBigQueryMetadataLoaded && isSemanticModelLoaded
 
-  console.log('agent ready?', isAgentReady, isBigQueryMetadataLoaded, isSemanticModelLoaded)
-  
   if (!isAgentReady) {
     return (
       <div className="flex justify-center items-center h-screen">

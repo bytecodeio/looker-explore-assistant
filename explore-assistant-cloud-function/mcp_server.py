@@ -11,6 +11,8 @@ import time
 import json
 import uuid
 import logging
+import traceback
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, Tuple
 from flask import Flask, request, Response, jsonify
 from flask_cors import CORS
@@ -20,9 +22,8 @@ from google.auth import default
 from google.auth.transport.requests import Request
 from google.oauth2 import service_account
 import looker_sdk
+from looker_sdk.rtl import api_settings
 from google.cloud import bigquery
-import vertexai
-from vertexai.generative_models import GenerativeModel
 
 logging.basicConfig(level=logging.INFO)
 
@@ -30,15 +31,11 @@ logging.basicConfig(level=logging.INFO)
 project = os.environ.get("PROJECT")
 location = os.environ.get("REGION", "us-central1")
 vertex_model = os.environ.get("VERTEX_MODEL", "gemini-2.0-flash-001")
-looker_api_client_id = os.environ.get("LOOKER_API_CLIENT_ID")
-looker_api_client_secret = os.environ.get("LOOKER_API_CLIENT_SECRET")
-looker_base_url = os.environ.get("LOOKER_BASE_URL")
 
 # BigQuery configuration for suggested golden queries
 bq_project_id = os.environ.get("BQ_PROJECT_ID", "ml-accelerator-dbarr")
 bq_dataset_id = os.environ.get("BQ_DATASET_ID", "explore_assistant")
-bq_suggested_table = os.environ.get("BQ_SUGGESTED_TABLE", "suggested_golden_queries")
-looker_base_url = os.environ.get("LOOKER_BASE_URL")
+bq_suggested_table = os.environ.get("BQ_SUGGESTED_TABLE", "silver_queries")
 
 def get_response_headers():
     return {
@@ -133,23 +130,43 @@ def call_vertex_ai_api_with_service_account(request_body: Dict[str, Any]) -> Opt
         return None
 
 def get_looker_sdk():
-    """Initialize and return Looker SDK instance"""
+    """Initialize and return Looker SDK instance using environment variables"""
     try:
-        # Configure Looker SDK settings
-        config = {
-            'base_url': looker_base_url,
-            'client_id': looker_api_client_id,
-            'client_secret': looker_api_client_secret,
-            'verify_ssl': True
-        }
+        logging.info("Initializing Looker SDK using LOOKERSDK_ environment variables...")
         
-        # Initialize SDK
-        sdk = looker_sdk.init40(**config)
+        # Check if required environment variables are set
+        base_url = os.environ.get('LOOKERSDK_BASE_URL')
+        client_id = os.environ.get('LOOKERSDK_CLIENT_ID')
+        client_secret = os.environ.get('LOOKERSDK_CLIENT_SECRET')
+        
+        logging.info(f"LOOKERSDK_BASE_URL: {base_url}")
+        logging.info(f"LOOKERSDK_CLIENT_ID: {client_id[:8]}..." if client_id else "LOOKERSDK_CLIENT_ID: None")
+        logging.info(f"LOOKERSDK_CLIENT_SECRET: {'***' if client_secret else 'None'}")
+        
+        if not base_url:
+            raise Exception("LOOKERSDK_BASE_URL environment variable is not set")
+        if not client_id:
+            raise Exception("LOOKERSDK_CLIENT_ID environment variable is not set")
+        if not client_secret:
+            raise Exception("LOOKERSDK_CLIENT_SECRET environment variable is not set")
+        
+        # Initialize SDK using environment variables (no config file needed)
+        sdk = looker_sdk.init40()
         logging.info("Looker SDK initialized successfully")
+        
+        # Test the SDK by trying to get current user info
+        try:
+            user = sdk.me()
+            logging.info(f"Looker SDK test successful - logged in as: {user.email}")
+        except Exception as test_error:
+            logging.warning(f"Looker SDK test failed: {test_error}")
+            # Don't fail completely, just log the warning
+        
         return sdk
         
     except Exception as e:
         logging.error(f"Error initializing Looker SDK: {e}")
+        logging.error(f"Traceback: {traceback.format_exc()}")
         return None
 
 def find_looker_user_by_email(email: str) -> Optional[Dict[str, Any]]:
@@ -184,7 +201,6 @@ def find_looker_user_by_email(email: str) -> Optional[Dict[str, Any]]:
         
     except Exception as e:
         logging.error(f"Error finding Looker user: {e}")
-        import traceback
         logging.error(f"Traceback: {traceback.format_exc()}")
         return None
 
@@ -717,7 +733,7 @@ def process_explore_assistant_request(auth_header: str, request_data: Dict[str, 
         has_feedback, approved_explore_params = detect_feedback_pattern(prompt_history, thread_messages, prompt)
         if has_feedback and approved_explore_params:
             # Save the suggested golden query with the APPROVED explore_params
-            save_success = save_suggested_golden_query(
+            save_success = save_suggested_silver_query(
                 auth_header, 
                 result.get('explore_key', ''), 
                 prompt_history,  # Pass entire prompt history
@@ -876,20 +892,22 @@ def detect_feedback_pattern(prompt_history: list, thread_messages: list, current
             approved_params = extract_approved_explore_params(thread_messages)
             return True, approved_params
             
-        logging.info("❌ No feedback pattern detected")
+        logging.info("No feedback pattern detected")
         return False, None
         
     except Exception as e:
         logging.error(f"Error detecting feedback pattern: {e}")
         return False, None
 
-def save_suggested_golden_query(auth_header: str, explore_key: str, prompt_history: list, 
+def save_suggested_silver_query(auth_header: str, explore_key: str, prompt_history: list, 
                                explore_params: Dict[str, Any], user_email: str) -> bool:
     """
     Save a suggested golden query to the BigQuery suggested_golden_queries table
     Now stores the complete prompt history for better context
     """
     try:
+        ensure_silver_queries_table_exists()
+
         # Create BigQuery client using default credentials (Cloud Run service account)
         client = bigquery.Client(project=bq_project_id)
         
@@ -990,7 +1008,32 @@ def create_mcp_flask_app():
             logging.info(f"Request data keys: {list(request_data.keys())}")
             logging.info(f"Test mode: {request_data.get('test_mode', False)}")
             
-            # Process the explore assistant request
+            # Check for bronze query generation operation
+            operation = request_data.get('operation')
+            if operation == 'generate_bronze_queries':
+                logging.info("Processing bronze query generation request...")
+                
+                # Extract user email from token
+                user_email = extract_user_email_from_token(auth_header)
+                if not user_email:
+                    return jsonify({"error": "Invalid or missing authentication token"}), 401, get_response_headers()
+                
+                model_name = request_data.get('model_name')
+                explore_name = request_data.get('explore_name')
+                explore_key = request_data.get('explore_key')
+                
+                if not all([model_name, explore_name, explore_key]):
+                    return jsonify({"error": "model_name, explore_name, and explore_key are required"}), 400, get_response_headers()
+                
+                try:
+                    result = generate_bronze_queries_for_explore(model_name, explore_name, explore_key, user_email)
+                    return jsonify(result), 200, get_response_headers()
+                except Exception as e:
+                    error_message = str(e)
+                    logging.error(f"Bronze queries generation failed: {error_message}")
+                    return jsonify({"error": error_message}), 500, get_response_headers()
+            
+            # Process the explore assistant request (default)
             logging.info("Processing explore assistant request...")
             result = process_explore_assistant_request(auth_header, request_data)
             
@@ -1005,7 +1048,6 @@ def create_mcp_flask_app():
             logging.error(f"Vertex AI proxy error: {e}")
             logging.error(f"Error type: {type(e)}")
             logging.error(f"Error args: {e.args}")
-            import traceback
             logging.error(f"Traceback: {traceback.format_exc()}")
             
             try:
@@ -1125,6 +1167,393 @@ def mcp_cloud_function_entrypoint(request):
         response.headers.update(get_response_headers())
         response.status_code = 404
         return response
+
+# For running directly as a Flask app (Cloud Run)
+
+def ensure_bronze_queries_table_exists():
+    """
+    Create the bronze_queries table if it doesn't exist, or update schema if needed
+    """
+    try:
+        client = bigquery.Client()
+        bronze_table_id = f"{bq_project_id}.{bq_dataset_id}.bronze_queries"
+        
+        # Check if table exists
+        try:
+            table = client.get_table(bronze_table_id)
+            logging.info(f"Bronze queries table {bronze_table_id} already exists")
+            
+            # Check if the new fields exist, add them if they don't
+            existing_field_names = {field.name for field in table.schema}
+            required_fields = {
+                'explore_params': bigquery.SchemaField("explore_params", "STRING", mode="NULLABLE"),
+                'query_url_params': bigquery.SchemaField("query_url_params", "STRING", mode="NULLABLE")
+            }
+            
+            fields_to_add = []
+            for field_name, field_schema in required_fields.items():
+                if field_name not in existing_field_names:
+                    fields_to_add.append(field_schema)
+                    logging.info(f"Need to add field: {field_name}")
+            
+            if fields_to_add:
+                logging.info(f"Adding {len(fields_to_add)} missing fields to bronze queries table")
+                # Create new schema with existing fields plus new fields
+                new_schema = list(table.schema) + fields_to_add
+                table.schema = new_schema
+                table = client.update_table(table, ["schema"])
+                logging.info(f"Successfully updated bronze queries table schema")
+            
+            return True
+            
+        except Exception as table_error:
+            logging.info(f"Bronze queries table {bronze_table_id} does not exist, creating it: {table_error}")
+        
+        # Define the complete table schema for new table creation
+        schema = [
+            bigquery.SchemaField("explore_key", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("model_name", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("explore_name", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("input_question", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("output_description", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("explore_params", "STRING", mode="NULLABLE"),  # Store query parameters as JSON
+            bigquery.SchemaField("query_url_params", "STRING", mode="NULLABLE"),  # Store URL parameters
+            bigquery.SchemaField("created_at", "TIMESTAMP", mode="REQUIRED"),
+            bigquery.SchemaField("source", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("user_email", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("query_run_count", "INTEGER", mode="NULLABLE"),
+            bigquery.SchemaField("original_query_url", "STRING", mode="NULLABLE")
+        ]
+        
+        # Create table reference
+        table_ref = client.dataset(bq_dataset_id, project=bq_project_id).table("bronze_queries")
+        table = bigquery.Table(table_ref, schema=schema)
+        
+        # Set table description
+        table.description = "Bronze queries generated from historical Looker query patterns for explore assistant training"
+        
+        # Create the table
+        table = client.create_table(table)
+        logging.info(f"Successfully created bronze queries table: {bronze_table_id}")
+        
+        return True
+        
+    except Exception as e:
+        logging.error(f"Failed to create bronze queries table: {e}")
+        raise Exception(f"Failed to create bronze queries table: {e}")
+
+def ensure_silver_queries_table_exists():
+    """
+    Create the silver_queries table if it doesn't exist, or update schema if needed.
+    """
+    try:
+        client = bigquery.Client(project=bq_project_id)
+        silver_table_id = f"{bq_project_id}.{bq_dataset_id}.{bq_suggested_table}"
+
+        # Check if table exists
+        try:
+            table = client.get_table(silver_table_id)
+            logging.info(f"Silver queries table {silver_table_id} already exists")
+            return True
+        except Exception as table_error:
+            logging.info(f"Silver queries table {silver_table_id} does not exist, creating it: {table_error}")
+
+        # Define the table schema
+        schema = [
+            bigquery.SchemaField("explore_key", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("prompt", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("explore_params", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("user_id", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("timestamp", "FLOAT", mode="NULLABLE"),
+            bigquery.SchemaField("created_at", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("approved", "BOOLEAN", mode="NULLABLE"),
+            bigquery.SchemaField("feedback_type", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("id", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("created_date", "STRING", mode="NULLABLE"),
+        ]
+
+        # Create table reference
+        table_ref = client.dataset(bq_dataset_id, project=bq_project_id).table(bq_suggested_table)
+        table = bigquery.Table(table_ref, schema=schema)
+        table.description = "Suggested golden queries for Looker Explore Assistant"
+
+        # Create the table
+        table = client.create_table(table)
+        logging.info(f"Successfully created silver queries table: {silver_table_id}")
+        return True
+
+    except Exception as e:
+        logging.error(f"Failed to create silver queries table: {e}")
+        raise Exception(f"Failed to create silver queries table: {e}")
+
+def generate_bronze_queries_for_explore(model_name: str, explore_name: str, explore_key: str, user_email: str = None) -> Dict[str, Any]:
+    """
+    Generate bronze queries for a specific explore by analyzing recent query history
+    and using Vertex AI to create natural language descriptions.
+    """
+    try:
+        # Ensure the bronze queries table exists
+        ensure_bronze_queries_table_exists()
+        
+        # Initialize Looker SDK
+        looker_sdk = get_looker_sdk()
+        if not looker_sdk:
+            raise Exception("Failed to initialize Looker SDK")
+        
+        logging.info(f"Generating bronze queries for explore: {explore_key}")
+        
+        # Fetch recent query history for this explore (last 30 days)
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=30)
+        
+        # Query Looker's query history using the system activity explore
+        # This replicates the logic from generate_examples.py
+        history_queries = []
+        
+        try:
+            # Use Looker API to get query history for this specific explore
+            query_params = {
+                'model': 'system__activity',
+                'explore': 'history',
+                'view': 'history',  # Add the required view field
+                'fields': ['history.query_run_count', 'query.model', 'query.view', 'query.formatted_fields', 'query.formatted_filters', 'query.formatted_pivots', 'query.sorts', 'query.limit', 'query.share_url'],
+                'filters': {
+                    'history.created_date': f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
+                    'query.model': model_name,
+                    'query.view': explore_name
+                },
+                'sorts': ['history.query_run_count desc'],
+                'limit': 50  # Get top 50 most-run queries
+            }
+            
+            # Create and run the query
+            query_response = looker_sdk.create_query(query_params)
+            if query_response and query_response.id:
+                results = looker_sdk.run_query(query_response.id, 'json')
+                if results:
+                    history_queries = json.loads(results)
+                    
+        except Exception as e:
+            logging.warning(f"Could not fetch query history: {e}")
+            # If we can't get history, check if the explore exists at least
+            try:
+                explore_info = looker_sdk.lookml_model_explore(model_name, explore_name)
+                if not explore_info:
+                    raise Exception(f"Explore {model_name}:{explore_name} not found")
+            except Exception as explore_error:
+                raise Exception(f"Explore validation failed: {explore_error}")
+            
+            # If explore exists but no history, return specific error
+            raise Exception("The explore is not yet used, so no queries could be retrieved.")
+        
+        if not history_queries or len(history_queries) == 0:
+            raise Exception("The explore is not yet used, so no queries could be retrieved.")
+        
+        logging.info(f"Found {len(history_queries)} historical queries for analysis")
+        
+        # Fetch explore metadata to provide context to the AI
+        try:
+            explore_metadata = looker_sdk.lookml_model_explore(
+                model_name, 
+                explore_name, 
+                fields='dimensions,measures,dimension_groups'
+            )
+        except Exception as e:
+            logging.warning(f"Could not fetch explore metadata: {e}")
+            explore_metadata = None
+        
+        # Prepare context for Vertex AI
+        context_parts = []
+        if explore_metadata:
+            # Add dimensions
+            if hasattr(explore_metadata, 'dimensions') and explore_metadata.dimensions:
+                dims = [d.name for d in explore_metadata.dimensions if d.name]
+                context_parts.append(f"Available dimensions: {', '.join(dims[:20])}")  # Limit to first 20
+            
+            # Add measures
+            if hasattr(explore_metadata, 'measures') and explore_metadata.measures:
+                measures = [m.name for m in explore_metadata.measures if m.name]
+                context_parts.append(f"Available measures: {', '.join(measures[:20])}")  # Limit to first 20
+        
+        explore_context = '\n'.join(context_parts) if context_parts else f"Explore: {model_name}.{explore_name}"
+        
+        # Process queries with Vertex AI to generate natural language descriptions
+        bronze_queries = []
+        
+        try:
+            # Process queries in batches to avoid token limits
+            batch_size = 10
+            for i in range(0, min(len(history_queries), 30), batch_size):  # Process max 30 queries
+                batch = history_queries[i:i+batch_size]
+                
+                # Prepare prompt for this batch
+                query_descriptions = []
+                for idx, query_data in enumerate(batch):
+                    query_desc = f"Query {i+idx+1}:\n"
+                    if query_data.get('query.formatted_fields'):
+                        query_desc += f"Fields: {query_data['query.formatted_fields']}\n"
+                    if query_data.get('query.formatted_filters'):
+                        query_desc += f"Filters: {query_data['query.formatted_filters']}\n"
+                    if query_data.get('query.formatted_pivots'):
+                        query_desc += f"Pivots: {query_data['query.formatted_pivots']}\n"
+                    if query_data.get('query.sorts'):
+                        query_desc += f"Sorts: {query_data['query.sorts']}\n"
+                    if query_data.get('query.limit'):
+                        query_desc += f"Limit: {query_data['query.limit']}\n"
+                    query_descriptions.append({
+                        'description': query_desc,
+                        'query_data': query_data
+                    })
+                
+                prompt = f"""
+You are analyzing Looker queries for the explore "{model_name}.{explore_name}".
+
+{explore_context}
+
+Please convert these Looker queries into natural language questions that a business user might ask. Each question should be clear, business-focused, and reflect what the query is trying to answer.
+
+Queries to convert:
+{chr(10).join([q['description'] for q in query_descriptions])}
+
+For each query, provide ONLY the natural language question on a single line, starting with "Q{i+1}: ". Keep questions concise and business-oriented.
+"""
+                
+                # Use existing Vertex AI API function instead of SDK
+                vertex_request = {
+                    "contents": [
+                        {
+                            "role": "user",
+                            "parts": [{"text": prompt}]
+                        }
+                    ],
+                    "generationConfig": {
+                        "temperature": 0.1,
+                        "topP": 0.8,
+                        "topK": 40,
+                        "maxOutputTokens": 1024
+                    }
+                }
+                
+                try:
+                    vertex_response = call_vertex_ai_api_with_service_account(vertex_request)
+                    if vertex_response:
+                        response_text = extract_vertex_response_text(vertex_response)
+                        if response_text:
+                            # Parse the response to extract individual questions
+                            lines = response_text.strip().split('\n')
+                            for line_idx, line in enumerate(lines):
+                                line = line.strip()
+                                if line.startswith('Q') and ':' in line:
+                                    question = line.split(':', 1)[1].strip()
+                                    if question and line_idx < len(query_descriptions):
+                                        original_query = query_descriptions[line_idx]['query_data']
+                                        
+                                        # Extract query parameters from the historical query
+                                        explore_params = {}
+                                        query_url_params = {}
+                                        
+                                        # Parse fields from formatted_fields
+                                        if original_query.get('query.formatted_fields'):
+                                            fields_str = original_query['query.formatted_fields']
+                                            # Clean up the fields string and split into list
+                                            fields = [f.strip() for f in fields_str.split(',') if f.strip()]
+                                            explore_params['fields'] = fields
+                                            query_url_params['fields'] = fields
+                                        
+                                        # Parse filters from formatted_filters
+                                        if original_query.get('query.formatted_filters'):
+                                            filters_str = original_query['query.formatted_filters']
+                                            # For now, store as string - could be parsed more sophisticatedly
+                                            explore_params['filters'] = filters_str
+                                            query_url_params['f'] = filters_str
+                                        
+                                        # Parse sorts
+                                        if original_query.get('query.sorts'):
+                                            sorts_str = original_query['query.sorts']
+                                            sorts = [s.strip() for s in sorts_str.split(',') if s.strip()]
+                                            explore_params['sorts'] = sorts
+                                            query_url_params['sorts'] = sorts
+                                        
+                                        # Parse limit
+                                        if original_query.get('query.limit'):
+                                            explore_params['limit'] = str(original_query['query.limit'])
+                                            query_url_params['limit'] = str(original_query['query.limit'])
+                                        
+                                        # Parse pivots if available
+                                        if original_query.get('query.formatted_pivots'):
+                                            pivots_str = original_query['query.formatted_pivots']
+                                            pivots = [p.strip() for p in pivots_str.split(',') if p.strip()]
+                                            explore_params['pivots'] = pivots
+                                            query_url_params['pivots'] = pivots
+                                        
+                                        bronze_queries.append({
+                                            'input': question,
+                                            'output': 'Generated from historical query patterns',
+                                            'explore_params': explore_params,  # Store structured query parameters
+                                            'query_url_params': query_url_params,  # Store URL-compatible parameters
+                                            'query_run_count': original_query.get('history.query_run_count'),
+                                            'original_query_url': original_query.get('query.share_url')
+                                        })
+                
+                except Exception as ai_error:
+                    logging.error(f"Vertex AI processing failed for batch {i}: {ai_error}")
+                    continue
+        
+        except Exception as ai_setup_error:
+            logging.error(f"Vertex AI setup failed: {ai_setup_error}")
+            raise Exception(f"AI service failed to generate queries: {ai_setup_error}")
+        
+        if not bronze_queries:
+            raise Exception("No bronze queries could be generated from the available data.")
+        
+        # Store bronze queries in BigQuery
+        try:
+            client = bigquery.Client()
+            bronze_table_id = f"{bq_project_id}.{bq_dataset_id}.bronze_queries"
+            
+            # Prepare rows for insertion
+            rows_to_insert = []
+            current_timestamp = datetime.now()
+            
+            for query in bronze_queries:
+                rows_to_insert.append({
+                    'explore_key': explore_key,
+                    'model_name': model_name,
+                    'explore_name': explore_name,
+                    'input_question': query['input'],
+                    'output_description': query['output'],
+                    'explore_params': json.dumps(query.get('explore_params', {})),  # Store as JSON string
+                    'query_url_params': json.dumps(query.get('query_url_params', {})),  # Store as JSON string
+                    'created_at': current_timestamp.isoformat(),
+                    'source': 'auto_generated',
+                    'user_email': user_email,
+                    'query_run_count': query.get('query_run_count'),
+                    'original_query_url': query.get('original_query_url')
+                })
+            
+            # Insert the data
+            errors = client.insert_rows_json(bronze_table_id, rows_to_insert)
+            
+            if errors:
+                logging.error(f"BigQuery insertion errors: {errors}")
+                raise Exception(f"Failed to store bronze queries: {errors}")
+            
+            logging.info(f"Successfully stored {len(bronze_queries)} bronze queries for {explore_key}")
+            
+        except Exception as bq_error:
+            logging.error(f"BigQuery storage failed: {bq_error}")
+            raise Exception(f"Failed to store bronze queries: {bq_error}")
+        
+        return {
+            'success': True,
+            'message': f'Successfully generated {len(bronze_queries)} bronze queries for {explore_key}',
+            'queries_generated': len(bronze_queries),
+            'explore_key': explore_key
+        }
+        
+    except Exception as e:
+        logging.error(f"Bronze query generation failed: {e}")
+        raise e
 
 # For running directly as a Flask app (Cloud Run)
 if __name__ == "__main__":
