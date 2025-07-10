@@ -220,11 +220,21 @@ def extract_vertex_response_text(vertex_response: Dict[str, Any]) -> Optional[st
 
 def determine_explore_from_prompt(auth_header: str, prompt: str, golden_queries: Dict[str, Any], 
                                  conversation_context: str = "") -> Optional[str]:
-    """Enhanced explore determination with conversation context"""
+    """
+    Enhanced explore determination with conversation context.
+    Always determines the best explore based on the prompt and conversation context,
+    ignoring any previously specified explore or model information.
+    """
     try:
+        logging.info("=== EXPLORE DETERMINATION START ===")
+        logging.info(f"Determining best explore for prompt: {prompt}")
+        logging.info(f"Has conversation context: {bool(conversation_context)}")
+        
         # Build system prompt with conversation context
         newline_char = "\n"
         system_prompt = f"""You are a Looker Explore Assistant. Your job is to determine which Looker explore is most appropriate for answering a user's question.
+
+IMPORTANT: You must analyze the user's question independently and select the BEST explore for their needs, regardless of any previous explore selections or model information.
 
 Available Explores and Examples:
 {json.dumps(golden_queries, indent=2)}
@@ -234,9 +244,10 @@ Available Explores and Examples:
 Instructions:
 1. Analyze the user's current prompt: "{prompt}"
 2. Consider the conversation context to understand what the user has been asking about
-3. Compare against all available explores and their examples
-4. Determine which explore would be best suited to answer this question
-5. Return ONLY the explore key (e.g., "order_items", "events", etc.) as a single string
+3. Compare against ALL available explores and their examples
+4. Determine which explore would be BEST suited to answer this question
+5. Ignore any previous explore selections - choose the optimal explore for this specific question
+6. Return ONLY the explore key (e.g., "order_items", "events", etc.) as a single string
 
 Current user prompt: {prompt}
 
@@ -261,6 +272,7 @@ Response format: Return only the explore key as plain text (no JSON, no explanat
         # Call Vertex AI using service account
         vertex_response = call_vertex_ai_api_with_service_account(vertex_request)
         if not vertex_response:
+            logging.error("❌ Failed to get response from Vertex AI")
             return None
         
         # Extract the explore key from response
@@ -268,13 +280,15 @@ Response format: Return only the explore key as plain text (no JSON, no explanat
         if response_text:
             # Clean up the response - remove any extra whitespace or formatting
             explore_key = response_text.strip().replace('"', '').replace('\n', '')
-            logging.info(f"Determined explore with context: {explore_key}")
+            logging.info(f"✅ Determined explore with context: {explore_key}")
+            logging.info("=== EXPLORE DETERMINATION COMPLETE ===")
             return explore_key
         
+        logging.error("❌ Failed to extract explore key from response")
         return None
         
     except Exception as e:
-        logging.error(f"Error determining explore: {e}")
+        logging.error(f"❌ Error determining explore: {e}")
         return None
 
 def generate_explore_params(auth_header: str, prompt: str, explore_key: str, 
@@ -660,10 +674,10 @@ def process_explore_assistant_request(auth_header: str, request_data: Dict[str, 
         prompt = request_data.get('prompt', '')
         conversation_id = request_data.get('conversation_id', '')
         prompt_history = request_data.get('prompt_history', [])
-        current_explore = request_data.get('current_explore', {})
+        current_explore = request_data.get('current_explore', {})  # This will be ignored in favor of AI selection
         golden_queries = request_data.get('golden_queries', {})
         semantic_models = request_data.get('semantic_models', {})
-        model_name = request_data.get('model_name', '')
+        model_name = request_data.get('model_name', '')  # This will be ignored in favor of AI selection
         data_to_summarize = request_data.get('data_to_summarize', '')
         test_mode = request_data.get('test_mode', False)
         
@@ -687,37 +701,50 @@ def process_explore_assistant_request(auth_header: str, request_data: Dict[str, 
         conversation_context = build_conversation_context(prompt_history, thread_messages)
         logging.info(f"Built conversation context: {conversation_context[:200]}..." if len(conversation_context) > 200 else f"Built conversation context: {conversation_context}")
         
-        # Check if current explore is null/empty
-        current_explore_key = current_explore.get('exploreKey') if current_explore else None
+        # Always determine the most appropriate explore for each request
+        # This ensures we select the best explore based on the current prompt and conversation context
+        logging.info("Always determining explore from prompt and conversation context")
+        determined_explore_key = determine_explore_from_prompt(
+            auth_header, prompt, golden_queries, conversation_context
+        )
         
-        if not current_explore_key or current_explore_key == '' or current_explore_key == 'null':
-            # Two-step process with conversation context
-            determined_explore_key = determine_explore_from_prompt(
-                auth_header, prompt, golden_queries, conversation_context
-            )
-            
-            if not determined_explore_key:
+        if not determined_explore_key:
+            # If AI couldn't determine explore, try to use first available explore as fallback
+            if golden_queries.get('exploreEntries'):
+                first_explore = list(golden_queries['exploreEntries'].keys())[0]
+                logging.warning(f"Failed to determine explore, using first available: {first_explore}")
+                determined_explore_key = first_explore
+            else:
                 return {
-                    'error': 'Failed to determine appropriate explore',
+                    'error': 'Failed to determine appropriate explore and no fallback available',
                     'message_type': 'error'
                 }
-            
-            current_explore = {
-                'exploreKey': determined_explore_key,
-                'exploreId': determined_explore_key,
-                'modelName': model_name
-            }
-            
-            result = generate_explore_params(
-                auth_header, prompt, determined_explore_key, 
-                golden_queries, semantic_models, current_explore, conversation_context
-            )
+        
+        logging.info(f"Determined explore key: {determined_explore_key}")
+        
+        # Extract model name and explore name from the determined explore key
+        # The explore key format is "model:explore_name" (e.g., "ecommerce:order_items")
+        if ':' in determined_explore_key:
+            model_name_from_key, explore_name_from_key = determined_explore_key.split(':', 1)
+            logging.info(f"Extracted from explore key - Model: {model_name_from_key}, Explore: {explore_name_from_key}")
         else:
-            # Single call with conversation context
-            result = generate_explore_params(
-                auth_header, prompt, current_explore_key, 
-                golden_queries, semantic_models, current_explore, conversation_context
-            )
+            # Fallback if the key doesn't contain model info
+            model_name_from_key = model_name or 'unknown'
+            explore_name_from_key = determined_explore_key
+            logging.warning(f"Explore key doesn't contain model info, using fallback: {model_name_from_key}:{explore_name_from_key}")
+        
+        # Create explore context for parameter generation
+        current_explore = {
+            'exploreKey': explore_name_from_key,  # Just the explore name part
+            'exploreId': determined_explore_key,  # Full key (model:explore_name)
+            'modelName': model_name_from_key      # Model name extracted from key
+        }
+        
+        # Generate explore parameters using the determined explore
+        result = generate_explore_params(
+            auth_header, prompt, determined_explore_key, 
+            golden_queries, semantic_models, current_explore, conversation_context
+        )
         
         if not result:
             return {
