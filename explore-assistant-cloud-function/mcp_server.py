@@ -32,7 +32,12 @@ location = os.environ.get("REGION", "us-central1")
 vertex_model = os.environ.get("VERTEX_MODEL", "gemini-2.0-flash-001")
 
 # BigQuery configuration for suggested golden queries
-bq_project_id = os.environ.get("BQ_PROJECT_ID", "ml-accelerator-dbarr")
+# default project id to current google project if not set
+# This allows the MCP server to run in any Google Cloud project without needing to set BQ_PROJECT_ID
+# If BQ_PROJECT_ID is not set, it will default to the current project
+
+cloud_project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
+bq_project_id = os.environ.get("BQ_PROJECT_ID", cloud_project_id if cloud_project_id else "")
 bq_dataset_id = os.environ.get("BQ_DATASET_ID", "explore_assistant")
 bq_suggested_table = os.environ.get("BQ_SUGGESTED_TABLE", "silver_queries")
 
