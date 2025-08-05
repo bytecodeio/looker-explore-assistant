@@ -25,6 +25,7 @@ import {
   WorkspacePremium as PromoteIcon,
   Visibility as ViewIcon,
   Launch as LaunchIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material'
 import { useHistory } from 'react-router-dom'
 import { ExtensionContext } from '@looker/extension-sdk-react'
@@ -63,7 +64,7 @@ const QueryPromotionPage: React.FC = () => {
   const [promotionHistory, setPromotionHistory] = useState<any[]>([])
   const history = useHistory()
 
-  const { getQueriesForPromotion, promoteQuery, getPromotionHistory } = useQueryPromotion()
+  const { getQueriesForPromotion, promoteQuery, getPromotionHistory, deleteSilverQuery, deleteBronzeQuery } = useQueryPromotion()
 
   const toggleSidebar = () => {
     setSidebarExpanded(!sidebarExpanded)
@@ -143,14 +144,17 @@ const QueryPromotionPage: React.FC = () => {
     const hostUrl = extensionSDK?.lookerHostData?.hostUrl
     if (!hostUrl) return null
     
-    // For silver queries, use share_url if available
-    if (query.share_url) {
-      return query.share_url
+    // Use the standardized 'link' field for both bronze and silver queries
+    if (query.link) {
+      return query.link
     }
     
-    // For bronze queries, construct URL from query_slug
-    if (query.query_slug) {
-      return `${hostUrl}/x/${query.query_slug}`
+    // Fallback: construct a basic explore URL for bronze queries without links
+    if (query.explore_id && query.source_table === 'bronze') {
+      const [model, explore] = query.explore_id.split(':')
+      if (model && explore) {
+        return `${hostUrl}/explore/${model}/${explore}`
+      }
     }
     
     return null
@@ -189,6 +193,82 @@ const QueryPromotionPage: React.FC = () => {
     }
   }
 
+  const handleDeleteSilverQuery = async (query: any) => {
+    setLoading(true)
+    setError(null)
+    setSuccess(null)
+    
+    try {
+      console.log('Deleting silver query:', query)
+      
+      // Use the query ID as the primary key for deletion
+      const queryId = query.id
+      if (!queryId) {
+        throw new Error('No query ID found for this query')
+      }
+      
+      const result = await deleteSilverQuery(queryId)
+      
+      console.log('Delete result:', result)
+      
+      if (result.success) {
+        // Show a user-friendly message with the input text for context
+        const displayText = query.input || 'Unknown query'
+        const truncatedText = displayText.length > 50 ? displayText.substring(0, 50) + '...' : displayText
+        setSuccess(`Successfully deleted silver query: "${truncatedText}"`)
+        
+        // Refresh the silver queries table to remove the deleted query
+        loadQueries('silver')
+      } else {
+        setError(result.message || 'Failed to delete query')
+      }
+      
+    } catch (err) {
+      console.error('Error deleting silver query:', err)
+      setError(`Failed to delete query: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteBronzeQuery = async (query: any) => {
+    setLoading(true)
+    setError(null)
+    setSuccess(null)
+    
+    try {
+      console.log('Deleting bronze query:', query)
+      
+      // Use the query ID as the primary key for deletion
+      const queryId = query.id
+      if (!queryId) {
+        throw new Error('No query ID found for this query')
+      }
+      
+      const result = await deleteBronzeQuery(queryId)
+      
+      console.log('Delete result:', result)
+      
+      if (result.success) {
+        // Show a user-friendly message with the input text for context
+        const displayText = query.input || 'Unknown query'
+        const truncatedText = displayText.length > 50 ? displayText.substring(0, 50) + '...' : displayText
+        setSuccess(`Successfully deleted bronze query: "${truncatedText}"`)
+        
+        // Refresh the bronze queries table to remove the deleted query
+        loadQueries('bronze')
+      } else {
+        setError(result.message || 'Failed to delete query')
+      }
+      
+    } catch (err) {
+      console.error('Error deleting bronze query:', err)
+      setError(`Failed to delete query: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const renderQueryTable = (tableQueries: any[]) => {
     if (tableQueries.length === 0) {
       return (
@@ -198,15 +278,20 @@ const QueryPromotionPage: React.FC = () => {
       )
     }
 
+    // Determine if we're showing bronze or silver data for better column headers
+    const isBronze = tabValue === 0
+    const isSilver = tabValue === 1
+
     return (
       <TableContainer component={Paper}>
         <Table>
           <TableHead>
             <TableRow>
               <TableCell>Explore</TableCell>
-              <TableCell>Question</TableCell>
-              <TableCell>User</TableCell>
-              <TableCell>Created</TableCell>
+              <TableCell>Input</TableCell>
+              {isBronze && <TableCell>Created</TableCell>}
+              {isBronze && <TableCell>Run Count</TableCell>}
+              {isSilver && <TableCell>Source</TableCell>}
               <TableCell>Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -214,15 +299,66 @@ const QueryPromotionPage: React.FC = () => {
             {tableQueries.map((query, index) => (
               <TableRow key={query.id || index}>
                 <TableCell>
-                  <Chip label={query.explore_key || 'Unknown'} size="small" />
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" noWrap style={{ maxWidth: 200 }}>
-                    {query.input_question || query.suggested_new_prompt || 'No question available'}
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      maxWidth: '150px',
+                      whiteSpace: 'normal',
+                      wordBreak: 'break-word',
+                      fontFamily: 'monospace',
+                      fontSize: '0.875rem'
+                    }}
+                  >
+                    {query.explore_id ? 
+                      query.explore_id.replace(':', ':\n') : 
+                      'Unknown'
+                    }
                   </Typography>
                 </TableCell>
-                <TableCell>{query.user_email || 'Unknown'}</TableCell>
-                <TableCell>{formatDate(query.created_at)}</TableCell>
+                <TableCell>
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      maxWidth: '300px',
+                      whiteSpace: 'normal',
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word'
+                    }}
+                  >
+                    {query.input || 'No question available'}
+                  </Typography>
+                </TableCell>
+                {isBronze && (
+                  <>
+                    <TableCell>{formatDate(query.created_at)}</TableCell>
+                    <TableCell>
+                      <Chip 
+                        label={query.query_run_count || 0} 
+                        size="small" 
+                        color="info"
+                      />
+                    </TableCell>
+                  </>
+                )}
+                {isSilver && (
+                  <TableCell>
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                        {query.user_email || query.user_id || 'Unknown'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {formatDate(query.created_at)}
+                      </Typography>
+                      <Box sx={{ mt: 0.5 }}>
+                        <Chip 
+                          label={query.feedback_type || 'unknown'} 
+                          size="small" 
+                          color="warning"
+                        />
+                      </Box>
+                    </Box>
+                  </TableCell>
+                )}
                 <TableCell>
                   <Box display="flex" gap={1}>
                     {constructLookerUrl(query) && (
@@ -238,13 +374,25 @@ const QueryPromotionPage: React.FC = () => {
                     <Tooltip title="Promote to Golden">
                       <IconButton 
                         size="small" 
-                        color="primary"
+                        sx={{ color: '#DAA520' }} // Golden color
                         onClick={() => handlePromoteQuery(query)}
                         disabled={loading}
                       >
                         <PromoteIcon />
                       </IconButton>
                     </Tooltip>
+                    {(isSilver || isBronze) && (
+                      <Tooltip title={`Delete ${isBronze ? 'Bronze' : 'Silver'} Query`}>
+                        <IconButton 
+                          size="small" 
+                          color="error"
+                          onClick={() => isBronze ? handleDeleteBronzeQuery(query) : handleDeleteSilverQuery(query)}
+                          disabled={loading}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </Box>
                 </TableCell>
               </TableRow>
@@ -311,7 +459,7 @@ const QueryPromotionPage: React.FC = () => {
           </Typography>
           
           <Typography variant="body1" color="text.secondary" gutterBottom>
-            Manage and promote queries from bronze and silver tables to golden queries for training data.
+            Manage the bronze → silver → golden query progression. Promote validated queries to golden training data with standardized core fields.
           </Typography>
 
           {error && (
@@ -341,7 +489,7 @@ const QueryPromotionPage: React.FC = () => {
                   <Grid item>
                     <Typography variant="h6">Bronze Queries</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Historical queries captured from user interactions
+                      Raw query patterns captured from user interactions with run counts
                     </Typography>
                   </Grid>
                   <Grid item xs />
@@ -374,7 +522,7 @@ const QueryPromotionPage: React.FC = () => {
                   <Grid item>
                     <Typography variant="h6">Silver Queries</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      User-corrected queries with validated results
+                      User-validated queries with feedback and conversation history
                     </Typography>
                   </Grid>
                   <Grid item xs />

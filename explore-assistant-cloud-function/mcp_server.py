@@ -1,3 +1,34 @@
+import spacy
+# Load spaCy model once at module level
+try:
+    nlp = spacy.load("en_core_web_sm")
+except Exception as e:
+    nlp = None
+    logging.warning(f"spaCy model load failed: {e}")
+
+def extract_nouns(text: str) -> list:
+    """Extract nouns from a text string using spaCy."""
+    if not nlp:
+        return []
+    doc = nlp(text)
+    return [token.text for token in doc if token.pos_ == "NOUN"]
+
+def get_vector_suggestions_for_nouns(nouns: list) -> dict:
+    """Run vector MCP search for each noun and return suggestions."""
+    try:
+        from explore_assistant_vector_mcp.server import VectorMCPServer
+        vector_server = VectorMCPServer()
+    except Exception as e:
+        logging.warning(f"Vector MCP server import failed: {e}")
+        return {}
+    suggestions = {}
+    for noun in nouns:
+        try:
+            result = vector_server.search_explores_and_fields(noun)
+            suggestions[noun] = result
+        except Exception as e:
+            logging.warning(f"Vector search failed for noun '{noun}': {e}")
+    return suggestions
 # MIT License
 
 # Copyright (c) 2023 Looker Data Sciences, Inc.
@@ -15,7 +46,7 @@ import traceback
 from pydantic import ValidationError
 from llm_utils import parse_llm_response, VertexAIResponse
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 from flask import Flask, request, Response, jsonify
 from flask_cors import CORS
 import requests
@@ -658,7 +689,7 @@ Output only the synthesized query."""
 
 def generate_explore_params_from_query(auth_header: str, query: str, explore_key: str, 
                                      golden_queries: Dict[str, Any], semantic_models: Dict[str, Any],
-                                     current_explore: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+                                     current_explore: Dict[str, Any], examples: List[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """Second LLM call: Generate explore parameters from a clear, synthesized query"""
     try:
         # Get semantic model for this explore
@@ -704,15 +735,25 @@ def generate_explore_params_from_query(auth_header: str, query: str, explore_key
         example_text = ""
         max_examples = 2  # Further reduced from 3 to 2
         
-        # Try to get a few representative examples
-        if 'exploreGenerationExamples' in golden_queries and explore_key in golden_queries['exploreGenerationExamples']:
-            examples = golden_queries['exploreGenerationExamples'][explore_key]
-            if isinstance(examples, list) and examples:
-                limited_examples = examples[:max_examples]
-                example_text = f"\nExample queries:\n"  # Shortened header
-                for i, ex in enumerate(limited_examples, 1):
-                    input_text = ex.get('input', '')[:80]  # Reduced from 100 to 80 chars
-                    example_text += f"{i}. {input_text}\n"
+        # Use provided examples or try to get relevant ones from golden queries
+        if examples and isinstance(examples, list) and len(examples) > 0:
+            logging.info(f"Using provided examples for explore parameter generation")
+            limited_examples = examples[:max_examples]
+            example_text = f"\nExample queries:\n"  # Shortened header
+            for i, ex in enumerate(limited_examples, 1):
+                input_text = ex.get('input', '')[:80]  # Reduced from 100 to 80 chars
+                example_text += f"{i}. {input_text}\n"
+        else:
+            logging.info(f"No examples provided, trying to get relevant ones from golden queries")
+            # Try to get a few representative examples from golden queries
+            if 'exploreGenerationExamples' in golden_queries and explore_key in golden_queries['exploreGenerationExamples']:
+                examples = golden_queries['exploreGenerationExamples'][explore_key]
+                if isinstance(examples, list) and examples:
+                    limited_examples = examples[:max_examples]
+                    example_text = f"\nExample queries:\n"  # Shortened header
+                    for i, ex in enumerate(limited_examples, 1):
+                        input_text = ex.get('input', '')[:80]  # Reduced from 100 to 80 chars
+                        example_text += f"{i}. {input_text}\n"
         
         # Calculate approximate prompt size for monitoring
         prompt_estimate = len(table_context) + len(example_text) + len(query) + 800  # Reduced base estimate
@@ -750,7 +791,7 @@ Vis types: single_value, table, looker_grid, looker_column, looker_bar, looker_l
 
         # Dynamically adjust maxOutputTokens based on prompt size to prevent MAX_TOKENS
         # Much more conservative limits for concise outputs
-        base_tokens = 1024
+        base_tokens = 2024
         prompt_char_count = len(system_prompt)
         
         # Rough estimate: 1 token ≈ 4 characters for English text
@@ -758,9 +799,9 @@ Vis types: single_value, table, looker_grid, looker_column, looker_bar, looker_l
         
         # Very conservative token allocation to force brevity
         if estimated_prompt_tokens > 4000:
-            max_output_tokens = 4000  # Very small for large prompts
+            max_output_tokens = 5000  # Very small for large prompts
         elif estimated_prompt_tokens > 2000:
-            max_output_tokens = 2000  # Small for medium prompts
+            max_output_tokens = 3000  # Small for medium prompts
         else:
             max_output_tokens = base_tokens  # Conservative baseline
             
@@ -991,12 +1032,19 @@ def process_explore_assistant_request(auth_header: str, request_data: Dict[str, 
         conversation_context = build_conversation_context(prompt_history, thread_messages)
         logging.info(f"Built conversation context: {conversation_context[:200]}..." if len(conversation_context) > 200 else f"Built conversation context: {conversation_context}")
         
+        first_phrase = prompt.split('.')[0] if prompt else ""
+        nouns = extract_nouns(first_phrase)
+        vector_suggestions = get_vector_suggestions_for_nouns(nouns)
+        logging.info(f"Nouns extracted from prompt: {nouns}")
+        logging.info(f"Vector suggestions: {vector_suggestions}")
         # Always determine the most appropriate explore for each request
         # This ensures we select the best explore based on the current prompt and conversation context
         # Ignoring any input explore or model information in favor of AI-driven selection
         logging.info("Always determining explore from prompt and conversation context")
         determined_explore_key = determine_explore_from_prompt(
             auth_header, prompt, golden_queries, conversation_context, restricted_explore_keys
+                'nouns': nouns,
+                'vector_suggestions': vector_suggestions
         )
         
         if not determined_explore_key:
@@ -1061,6 +1109,8 @@ def process_explore_assistant_request(auth_header: str, request_data: Dict[str, 
             logging.info(f"Extracted from explore key - Model: {model_name_from_key}, Explore: {explore_name_from_key}")
         else:
             # Fallback if the key doesn't contain model info
+                        'nouns': nouns,
+                        'vector_suggestions': vector_suggestions
             model_name_from_key = 'unknown'
             explore_name_from_key = determined_explore_key
             logging.warning(f"Explore key doesn't contain model info, using fallback: {model_name_from_key}:{explore_name_from_key}")
@@ -1094,12 +1144,16 @@ def process_explore_assistant_request(auth_header: str, request_data: Dict[str, 
         if has_feedback and approved_explore_params:
             # Save the suggested golden query with the APPROVED explore_params
             save_success = save_suggested_silver_query(
+                'nouns': nouns,
+                'vector_suggestions': vector_suggestions
                 auth_header, 
                 result.get('explore_key', '') if isinstance(result, dict) else '', 
                 prompt_history,  # Pass entire prompt history
                 approved_explore_params,  # Use the approved params
                 user_email
             )
+            result['nouns'] = nouns
+            result['vector_suggestions'] = vector_suggestions
             
             if save_success and isinstance(result, dict):
                 result['feedback_message'] = "Thank you for your feedback. This is being saved as an improved example."
@@ -1125,6 +1179,8 @@ def build_conversation_context(prompt_history: list, thread_messages: list) -> s
         context_parts = []
         
         if prompt_history:
+            'nouns': nouns if 'nouns' in locals() else [],
+            'vector_suggestions': vector_suggestions if 'vector_suggestions' in locals() else {}
             context_parts.append("Previous prompts in this conversation:")
             # Show all prompts except the last one (which is the current prompt)
             for i, prev_prompt in enumerate(prompt_history[:-1], 1):
@@ -1321,16 +1377,6 @@ Output only the suggested prompt, nothing else."""
             }
         }
         
-        # Call Vertex AI using service account
-        vertex_response = call_vertex_ai_api_with_service_account(vertex_request)
-        if not vertex_response:
-            logging.error("Failed to get response from Vertex AI for suggested prompt")
-            return None
-        
-        # Extract the suggested prompt
-        suggested_prompt = extract_vertex_response_text(vertex_response)
-        if suggested_prompt:
-            suggested_prompt = suggested_prompt.strip()
             # Remove any quotes that might have been added
             if suggested_prompt.startswith('"') and suggested_prompt.endswith('"'):
                 suggested_prompt = suggested_prompt[1:-1]
@@ -1475,7 +1521,7 @@ def save_suggested_silver_query(auth_header: str, explore_key: str, prompt_histo
         suggested_query = {
             'id': str(uuid.uuid4()),  # Generate UUID for the id field
             'explore_id': explore_key,  # Standardized field name
-            'input': json.dumps(prompt_history),  # Store complete prompt history as JSON string - standardized field name
+            'input': suggested_prompt,  # Store the revised/suggested prompt as a string - standardized field name
             'output': json.dumps(explore_params),  # Store as JSON string - standardized field name
             'created_at': datetime.fromtimestamp(current_time).isoformat(),  # Convert to ISO format string
             'user_id': user_email,
@@ -1722,7 +1768,7 @@ def promote_query_atomic(query_id: str, source_table: str, target_table: str,
         
         # Generate new UUID for the promoted query
         new_query_id = str(uuid.uuid4())
-        current_timestamp = datetime.now()
+        current_timestamp = datetime.now().isoformat()  # Convert to ISO format string
         
         # First, get the source query data - both tables now have proper 'id' field
         get_query = f"""
@@ -1739,7 +1785,33 @@ def promote_query_atomic(query_id: str, source_table: str, target_table: str,
         source_data = client.query(get_query, job_config=job_config).to_dataframe()
         
         if source_data.empty:
-            raise ValueError(f"Query {query_id} not found in {source_table}")
+            # Query not found - provide detailed error information
+            logging.warning(f"❌ Query {query_id} not found in {source_table} table")
+            
+            # Check if the query might have been already promoted (exists in golden table)
+            check_golden_query = f"""
+            SELECT id FROM `{target_table_name}`
+            WHERE id = @query_id OR id LIKE '%{query_id}%'
+            LIMIT 1
+            """
+            
+            try:
+                golden_check = client.query(check_golden_query, job_config=job_config).to_dataframe()
+                if not golden_check.empty:
+                    raise ValueError(f"Query {query_id} not found in {source_table} - it may have already been promoted to golden queries")
+            except Exception as golden_check_error:
+                logging.warning(f"Could not check golden table: {golden_check_error}")
+            
+            # Check if the source table exists and has any data
+            try:
+                count_query = f"SELECT COUNT(*) as total FROM `{source_table_name}`"
+                count_result = client.query(count_query).to_dataframe()
+                total_rows = count_result.iloc[0]['total'] if not count_result.empty else 0
+                logging.info(f"Source table {source_table} currently has {total_rows} total rows")
+            except Exception as count_error:
+                logging.warning(f"Could not count rows in source table: {count_error}")
+            
+            raise ValueError(f"Query {query_id} not found in {source_table}. This may happen if the query was recently deleted, already promoted, or affected by streaming buffer operations. Please refresh the query list and try again.")
         
         source_row = source_data.iloc[0]
         
@@ -1754,7 +1826,7 @@ def promote_query_atomic(query_id: str, source_table: str, target_table: str,
             'output': source_row.get('output', ''),  # Use 'output' field for standardization
             'link': source_row.get('link', ''),  # Use standardized 'link' field
             'promoted_by': promoted_by,
-            'promoted_at': current_timestamp  # Use timestamp format
+            'promoted_at': current_timestamp  # Now using ISO format string
         }
         
         # Insert into golden queries table
@@ -1764,14 +1836,100 @@ def promote_query_atomic(query_id: str, source_table: str, target_table: str,
         if errors:
             raise Exception(f"Failed to insert into golden queries: {errors}")
         
-        # Delete from source table
+        # Delete from source table with streaming buffer workaround
         delete_query = f"""
         DELETE FROM `{source_table_name}`
         WHERE id = @query_id
         """
         
-        delete_job = client.query(delete_query, job_config=job_config)
-        delete_job.result()  # Wait for completion
+        try:
+            delete_job = client.query(delete_query, job_config=job_config)
+            delete_job.result()  # Wait for completion
+            logging.info(f"Successfully deleted query {query_id} from {source_table}")
+            
+        except Exception as delete_error:
+            error_message = str(delete_error)
+            
+            # Check if this is the streaming buffer error
+            if "streaming buffer" in error_message.lower():
+                logging.warning(f"⚠️ Cannot delete query '{query_id}' from {source_table} - data is in streaming buffer")
+                
+                # Try to recreate the table without the promoted row (workaround)
+                try:
+                    logging.info(f"🔄 Attempting workaround: recreating {source_table} table without the promoted row")
+                    
+                    # Get all data except the row to delete
+                    backup_query = f"""
+                    SELECT *
+                    FROM `{source_table_name}`
+                    WHERE id != @query_id
+                    """
+                    
+                    backup_data = client.query(backup_query, job_config=job_config).to_dataframe()
+                    logging.info(f"🔄 Retrieved {len(backup_data)} rows for backup from {source_table}")
+                    
+                    # Drop and recreate the table
+                    client.delete_table(source_table_name, not_found_ok=True)
+                    logging.info(f"🔄 Dropped {source_table} table")
+                    
+                    # Recreate table based on source type
+                    if source_table == 'bronze':
+                        ensure_bronze_queries_table_exists()
+                    elif source_table == 'silver':
+                        ensure_silver_queries_table_exists()
+                    logging.info(f"🔄 Recreated {source_table} table")
+                    
+                    # Insert backup data if any exists
+                    if not backup_data.empty:
+                        # Convert DataFrame to list of dicts for insertion
+                        rows_to_insert = []
+                        for _, row in backup_data.iterrows():
+                            if source_table == 'bronze':
+                                row_dict = {
+                                    'id': str(row['id']),
+                                    'explore_id': str(row['explore_id']),
+                                    'input': str(row['input']),
+                                    'output': str(row['output']),
+                                    'created_at': row['created_at'].isoformat() if hasattr(row['created_at'], 'isoformat') else str(row['created_at']),
+                                    'user_email': str(row['user_email']) if row['user_email'] is not None else '',
+                                    'query_run_count': int(row['query_run_count']) if row['query_run_count'] is not None else 0,
+                                    'link': str(row['link']) if row['link'] is not None else ''
+                                }
+                            elif source_table == 'silver':
+                                row_dict = {
+                                    'id': str(row['id']),
+                                    'explore_id': str(row['explore_id']),
+                                    'input': str(row['input']),
+                                    'output': str(row['output']),
+                                    'created_at': row['created_at'].isoformat() if hasattr(row['created_at'], 'isoformat') else str(row['created_at']),
+                                    'user_id': str(row['user_id']) if row['user_id'] is not None else '',
+                                    'feedback_type': str(row['feedback_type']) if row['feedback_type'] is not None else '',
+                                    'link': str(row['link']) if row['link'] is not None else '',
+                                    'conversation_history': str(row['conversation_history']) if row['conversation_history'] is not None else ''
+                                }
+                            rows_to_insert.append(row_dict)
+                        
+                        # Insert backup data
+                        table = client.get_table(source_table_name)
+                        errors = client.insert_rows_json(table, rows_to_insert)
+                        
+                        if errors:
+                            logging.error(f"🔄 Error reinserting backup data to {source_table}: {errors}")
+                            # Don't fail the promotion since the query was already promoted successfully
+                            logging.warning(f"⚠️ Promotion succeeded but failed to clean up {source_table} table")
+                        else:
+                            logging.info(f"🔄 Successfully reinserted {len(rows_to_insert)} rows to {source_table}")
+                    
+                    logging.info(f"✅ Successfully promoted and deleted query '{query_id}' using table recreation workaround")
+                    
+                except Exception as workaround_error:
+                    logging.error(f"🔄 Workaround failed for {source_table}: {workaround_error}")
+                    # Don't fail the promotion since the query was already promoted successfully
+                    logging.warning(f"⚠️ Promotion succeeded but query '{query_id}' may still exist in {source_table} due to streaming buffer limitation")
+            else:
+                # Different error, log but don't fail the promotion since it already succeeded
+                logging.error(f"❌ Error deleting query from {source_table}: {delete_error}")
+                logging.warning(f"⚠️ Promotion succeeded but query '{query_id}' may still exist in {source_table}")
         
         # Log the promotion for audit trail
         log_promotion(query_id, source_table, target_table, promoted_by, reason, new_query_id)
@@ -1925,7 +2083,7 @@ def ensure_bronze_queries_table_exists():
             bigquery.SchemaField("created_at", "TIMESTAMP", mode="REQUIRED"),
             bigquery.SchemaField("user_email", "STRING", mode="NULLABLE"),
             bigquery.SchemaField("query_run_count", "INTEGER", mode="NULLABLE"),  # Bronze-specific field
-            bigquery.SchemaField("link", "STRING", mode="NULLABLE")  # Standardized to match golden
+            bigquery.SchemaField("link", "STRING", mode="NULLABLE")  # Standardized to match golden - stores /x/{slug} links
         ]
         
         expected_field_names = {field.name for field in correct_schema}
@@ -2011,27 +2169,6 @@ def ensure_silver_queries_table_exists():
 
     except Exception as e:
         logging.error(f"Failed to ensure silver queries table: {e}")
-        raise e
-
-def generate_bronze_queries_for_explore(model_name: str, explore_name: str, explore_key: str, user_email: str) -> Dict[str, Any]:
-    """
-    Generate bronze queries for a specific explore (placeholder implementation)
-    """
-    try:
-        # Ensure bronze table exists
-        ensure_bronze_queries_table_exists()
-        
-        # For now, return a simple success message
-        # This function would be implemented to generate actual bronze queries
-        return {
-            "status": "success",
-            "message": f"Bronze query generation initiated for {model_name}.{explore_name}",
-            "explore_key": explore_key,
-            "user_email": user_email
-        }
-        
-    except Exception as e:
-        logging.error(f"Error generating bronze queries: {e}")
         raise e
 
 def ensure_golden_queries_table_exists():
@@ -2151,6 +2288,511 @@ def ensure_promotion_log_table_exists():
     except Exception as e:
         logging.error(f"Failed to create promotion log table: {e}")
         raise e
+
+def delete_bronze_query_by_id(query_id: str, deleted_by: str) -> Dict[str, Any]:
+    """
+    Delete a bronze query by ID
+    
+    Args:
+        query_id: The query ID to delete (primary key)
+        deleted_by: User email who is deleting the query
+    
+    Returns:
+        Dict with deletion results
+    """
+    try:
+        logging.info(f"🗑️ Starting delete operation for bronze query_id: '{query_id}' by user: '{deleted_by}'")
+        
+        client = bigquery.Client(project=bq_project_id)
+        logging.info(f"🗑️ BigQuery client initialized for project: {bq_project_id}")
+        
+        # Ensure bronze table exists
+        ensure_bronze_queries_table_exists()
+        logging.info(f"🗑️ Bronze table existence verified")
+        
+        table_name = f"{bq_project_id}.{bq_dataset_id}.bronze_queries"
+        logging.info(f"🗑️ Target table: {table_name}")
+        
+        # First, check if the query exists and if it's in streaming buffer
+        check_query = f"""
+        SELECT id, created_at
+        FROM `{table_name}`
+        WHERE id = @query_id
+        """
+        
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("query_id", "STRING", query_id)
+            ]
+        )
+        
+        logging.info(f"🗑️ Checking if query exists: {check_query}")
+        check_result = client.query(check_query, job_config=job_config).to_dataframe()
+        
+        if check_result.empty:
+            logging.warning(f"⚠️ No bronze queries found with id: '{query_id}'")
+            return {
+                'success': False,
+                'affected_rows': 0,
+                'query_id': query_id,
+                'deleted_by': deleted_by,
+                'message': 'No queries found with the specified ID'
+            }
+        
+        # Try to delete the query
+        delete_query = f"""
+        DELETE FROM `{table_name}`
+        WHERE id = @query_id
+        """
+        
+        logging.info(f"🗑️ Executing delete query: {delete_query}")
+        logging.info(f"🗑️ Query parameter: query_id = '{query_id}'")
+        
+        try:
+            delete_job = client.query(delete_query, job_config=job_config)
+            result = delete_job.result()  # Wait for completion
+            logging.info(f"🗑️ Delete job completed")
+            
+            # Get number of affected rows
+            affected_rows = delete_job.num_dml_affected_rows
+            logging.info(f"🗑️ Affected rows: {affected_rows}")
+            
+            if affected_rows > 0:
+                logging.info(f"✅ Successfully deleted {affected_rows} bronze query(ies) with id: '{query_id}' by user: {deleted_by}")
+                return {
+                    'success': True,
+                    'affected_rows': affected_rows,
+                    'query_id': query_id,
+                    'deleted_by': deleted_by,
+                    'message': f'Deleted {affected_rows} query(ies) from bronze table'
+                }
+            else:
+                logging.warning(f"⚠️ No bronze queries were deleted for id: '{query_id}'")
+                return {
+                    'success': False,
+                    'affected_rows': 0,
+                    'query_id': query_id,
+                    'deleted_by': deleted_by,
+                    'message': 'Query found but could not be deleted'
+                }
+                
+        except Exception as delete_error:
+            error_message = str(delete_error)
+            
+            # Check if this is the streaming buffer error
+            if "streaming buffer" in error_message.lower():
+                logging.warning(f"⚠️ Cannot delete query '{query_id}' - data is in streaming buffer")
+                
+                # Try to recreate the table without the specific row (workaround)
+                try:
+                    logging.info(f"🔄 Attempting workaround: recreating bronze table without the deleted row")
+                    
+                    # Get all data except the row to delete
+                    backup_query = f"""
+                    SELECT *
+                    FROM `{table_name}`
+                    WHERE id != @query_id
+                    """
+                    
+                    backup_data = client.query(backup_query, job_config=job_config).to_dataframe()
+                    logging.info(f"🔄 Retrieved {len(backup_data)} rows for backup")
+                    
+                    # Drop and recreate the table
+                    client.delete_table(table_name, not_found_ok=True)
+                    logging.info(f"🔄 Dropped bronze table")
+                    
+                    # Recreate table
+                    ensure_bronze_queries_table_exists()
+                    logging.info(f"🔄 Recreated bronze table")
+                    
+                    # Insert backup data if any exists
+                    if not backup_data.empty:
+                        # Convert DataFrame to list of dicts for insertion
+                        rows_to_insert = []
+                        for _, row in backup_data.iterrows():
+                            row_dict = {
+                                'id': str(row['id']),
+                                'explore_id': str(row['explore_id']),
+                                'input': str(row['input']),
+                                'output': str(row['output']),
+                                'created_at': row['created_at'].isoformat() if hasattr(row['created_at'], 'isoformat') else str(row['created_at']),
+                                'user_email': str(row['user_email']) if row['user_email'] is not None else '',
+                                'query_run_count': int(row['query_run_count']) if row['query_run_count'] is not None else 0,
+                                'link': str(row['link']) if row['link'] is not None else ''
+                            }
+                            rows_to_insert.append(row_dict)
+                        
+                        # Insert backup data
+                        table = client.get_table(table_name)
+                        errors = client.insert_rows_json(table, rows_to_insert)
+                        
+                        if errors:
+                            logging.error(f"🔄 Error reinserting backup data: {errors}")
+                            return {
+                                'success': False,
+                                'affected_rows': 0,
+                                'query_id': query_id,
+                                'deleted_by': deleted_by,
+                                'message': f'Failed to reinsert backup data after deletion: {errors}'
+                            }
+                        else:
+                            logging.info(f"🔄 Successfully reinserted {len(rows_to_insert)} rows")
+                    
+                    logging.info(f"✅ Successfully deleted query '{query_id}' using table recreation workaround")
+                    return {
+                        'success': True,
+                        'affected_rows': 1,
+                        'query_id': query_id,
+                        'deleted_by': deleted_by,
+                        'message': 'Query deleted successfully (using table recreation due to streaming buffer limitation)'
+                    }
+                    
+                except Exception as workaround_error:
+                    logging.error(f"🔄 Workaround failed: {workaround_error}")
+                    return {
+                        'success': False,
+                        'affected_rows': 0,
+                        'query_id': query_id,
+                        'deleted_by': deleted_by,
+                        'message': f'Cannot delete query: data is in BigQuery streaming buffer. Please wait a few minutes and try again, or contact an administrator. Original error: {error_message}'
+                    }
+            else:
+                # Different error, re-raise
+                raise delete_error
+        
+    except Exception as e:
+        logging.error(f"❌ Error deleting bronze query with id '{query_id}': {e}")
+        logging.error(f"❌ Traceback: {traceback.format_exc()}")
+        return {
+            'success': False,
+            'affected_rows': 0,
+            'query_id': query_id,
+            'deleted_by': deleted_by,
+            'message': f'Database error during deletion: {str(e)}'
+        }
+
+
+def delete_silver_query_by_id(query_id: str, deleted_by: str) -> Dict[str, Any]:
+    """
+    Delete a silver query by ID
+    
+    Args:
+        query_id: The query ID to delete (primary key)
+        deleted_by: User email who is deleting the query
+    
+    Returns:
+        Dict with deletion results
+    """
+    try:
+        logging.info(f"🗑️ Starting delete operation for query_id: '{query_id}' by user: '{deleted_by}'")
+        
+        client = bigquery.Client(project=bq_project_id)
+        logging.info(f"🗑️ BigQuery client initialized for project: {bq_project_id}")
+        
+        # Ensure silver table exists
+        ensure_silver_queries_table_exists()
+        logging.info(f"🗑️ Silver table existence verified")
+        
+        table_name = f"{bq_project_id}.{bq_dataset_id}.{bq_suggested_table}"
+        logging.info(f"🗑️ Target table: {table_name}")
+        
+        # Delete query using id as the primary key
+        delete_query = f"""
+        DELETE FROM `{table_name}`
+        WHERE id = @query_id
+        """
+        
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("query_id", "STRING", query_id)
+            ]
+        )
+        
+        logging.info(f"🗑️ Executing delete query: {delete_query}")
+        logging.info(f"🗑️ Query parameter: query_id = '{query_id}'")
+        
+        delete_job = client.query(delete_query, job_config=job_config)
+        result = delete_job.result()  # Wait for completion
+        logging.info(f"🗑️ Delete job completed")
+        
+        # Get number of affected rows
+        affected_rows = delete_job.num_dml_affected_rows
+        logging.info(f"🗑️ Affected rows: {affected_rows}")
+        
+        if affected_rows > 0:
+            logging.info(f"✅ Successfully deleted {affected_rows} silver query(ies) with id: '{query_id}' by user: {deleted_by}")
+            return {
+                'success': True,
+                'affected_rows': affected_rows,
+                'query_id': query_id,
+                'deleted_by': deleted_by,
+                'message': f'Deleted {affected_rows} query(ies) from silver table'
+            }
+        else:
+            logging.warning(f"⚠️ No silver queries found with id: '{query_id}'")
+            return {
+                'success': False,
+                'affected_rows': 0,
+                'query_id': query_id,
+                'deleted_by': deleted_by,
+                'message': 'No queries found with the specified ID'
+            }
+        
+    except Exception as e:
+        logging.error(f"❌ Error deleting silver query with id '{query_id}': {e}")
+        logging.error(f"❌ Traceback: {traceback.format_exc()}")
+        return {
+            'success': False,
+            'affected_rows': 0,
+            'query_id': query_id,
+            'deleted_by': deleted_by,
+            'message': f'Database error during deletion: {str(e)}'
+        }
+
+
+def generate_bronze_queries_for_explore(model_name: str, explore_name: str, explore_key: str, user_email: str = None) -> Dict[str, Any]:
+    """
+    Generate bronze queries for a specific explore by analyzing recent query history
+    and using Vertex AI to create natural language descriptions.
+    """
+    try:
+        # Ensure the bronze queries table exists
+        ensure_bronze_queries_table_exists()
+        
+        # Initialize Looker SDK
+        looker_sdk = get_looker_sdk()
+        if not looker_sdk:
+            raise Exception("Failed to initialize Looker SDK")
+        
+        logging.info(f"Generating bronze queries for explore: {explore_key}")
+        
+        # Fetch recent query history for this explore (last 30 days)
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=30)
+        
+        # Query Looker's query history using the system activity explore
+        # This replicates the logic from generate_examples.py
+        history_queries = []
+        
+        try:
+            # Use Looker API to get query history for this specific explore
+            query_params = {
+                'model': 'system__activity',
+            # If explore exists but no history, return specific error
+            raise Exception("The explore is not yet used, so no queries could be retrieved.")
+        
+        if not history_queries or len(history_queries) == 0:
+            raise Exception("The explore is not yet used, so no queries could be retrieved.")
+        
+        logging.info(f"Found {len(history_queries)} historical queries for analysis")
+        
+        # Fetch explore metadata to provide context to the AI
+        try:
+            explore_metadata = looker_sdk.lookml_model_explore(
+        # Vector MCP integration: try semantic bronze query generation first
+        bronze_queries = []
+        try:
+            try:
+                from explore_assistant_vector_mcp.server import VectorMCPServer
+                vector_server = VectorMCPServer()
+                # Use vector search to generate bronze queries if available
+                vector_results = vector_server.generate_bronze_queries(model_name, explore_name, explore_key, history_queries)
+                if vector_results:
+                    bronze_queries = vector_results
+                    logging.info(f"Vector MCP generated {len(bronze_queries)} bronze queries for {explore_key}")
+            except Exception as vector_error:
+                logging.warning(f"Vector MCP bronze query generation failed: {vector_error}")
+                # Fallback to legacy Vertex AI logic below
+            if not bronze_queries:
+                # ...existing code for Vertex AI batch processing...
+                batch_size = 10
+                for i in range(0, min(len(history_queries), 30), batch_size):
+                    batch = history_queries[i:i+batch_size]
+                    query_descriptions = []
+                    for idx, query_data in enumerate(batch):
+                        query_desc = f"Query {i+idx+1}:\n"
+                        if query_data.get('query.formatted_fields'):
+                            query_desc += f"Fields: {query_data['query.formatted_fields']}\n"
+                        if query_data.get('query.formatted_filters'):
+                            query_desc += f"Filters: {query_data['query.formatted_filters']}\n"
+                        if query_data.get('query.formatted_pivots'):
+                            query_desc += f"Pivots: {query_data['query.formatted_pivots']}\n"
+                        if query_data.get('query.sorts'):
+                            query_desc += f"Sorts: {query_data['query.sorts']}\n"
+                        if query_data.get('query.limit'):
+                            query_desc += f"Limit: {query_data['query.limit']}\n"
+                        query_descriptions.append({
+                            'description': query_desc,
+                            'query_data': query_data
+                        })
+                    prompt = f"""
+        
+        if not bronze_queries:
+            raise Exception("No bronze queries could be generated from the available data.")
+        
+        # Store bronze queries in BigQuery
+        try:
+            client = bigquery.Client(project=bq_project_id)
+            bronze_table_id = f"{bq_project_id}.{bq_dataset_id}.bronze_queries"
+            
+            # Prepare rows for insertion using standardized schema
+            rows_to_insert = []
+                    vertex_request = {
+                        "contents": [
+                            {
+                                "role": "user",
+                                "parts": [{"text": prompt}]
+                            }
+                        ],
+                        "generationConfig": {
+                            "temperature": 0.1,
+                            "topP": 0.8,
+                            "topK": 40,
+                            "maxOutputTokens": 2048
+                        }
+                    }
+                    try:
+                        vertex_response = call_vertex_ai_api_with_service_account(vertex_request)
+                        if vertex_response:
+                            response_text = extract_vertex_response_text(vertex_response)
+                            if response_text:
+                                lines = response_text.strip().split('\n')
+                                for line_idx, line in enumerate(lines):
+                                    line = line.strip()
+                                    if line.startswith('Q') and ':' in line:
+                                        question = line.split(':', 1)[1].strip()
+                                        if question and line_idx < len(query_descriptions):
+                                            original_query = query_descriptions[line_idx]['query_data']
+                                            explore_params = {}
+                                            query_url_params = {}
+                                            if original_query.get('query.formatted_fields'):
+                                                fields_str = original_query['query.formatted_fields']
+                                                fields = [f.strip() for f in fields_str.split(',') if f.strip()]
+                                                explore_params['fields'] = fields
+                                                query_url_params['fields'] = fields
+                                            if original_query.get('query.formatted_filters'):
+                                                filters_str = original_query['query.formatted_filters']
+                                                explore_params['filters'] = filters_str
+                                                query_url_params['f'] = filters_str
+                                            if original_query.get('query.sorts'):
+                                                sorts_str = original_query['query.sorts']
+                                                sorts = [s.strip() for s in sorts_str.split(',') if s.strip()]
+                                                explore_params['sorts'] = sorts
+                                                query_url_params['sorts'] = sorts
+                                            if original_query.get('query.limit'):
+                                                explore_params['limit'] = str(original_query['query.limit'])
+                                                query_url_params['limit'] = str(original_query['query.limit'])
+                                            if original_query.get('query.formatted_pivots'):
+                                                pivots_str = original_query['query.formatted_pivots']
+                                                pivots = [p.strip() for p in pivots_str.split(',') if p.strip()]
+                                                explore_params['pivots'] = pivots
+                                                query_url_params['pivots'] = pivots
+                                            bronze_queries.append({
+                                                'input': question,
+                                                'output': 'Generated from historical query patterns',
+                                                'explore_params': explore_params,
+                                                'query_url_params': query_url_params,
+                                                'query_run_count': original_query.get('history.query_run_count'),
+                                                'original_query_url': f'/x/{original_query.get("query.slug")}' if original_query.get("query.slug") else ''
+                                            })
+                    except Exception as ai_error:
+                        logging.error(f"Vertex AI processing failed for batch {i}: {ai_error}")
+                        continue
+            if not bronze_queries:
+                raise Exception("No bronze queries could be generated from the available data.")
+            # ...existing code for storing bronze queries in BigQuery...
+            client = bigquery.Client(project=bq_project_id)
+            bronze_table_id = f"{bq_project_id}.{bq_dataset_id}.bronze_queries"
+            rows_to_insert = []
+            current_timestamp = datetime.now().isoformat()
+            for query in bronze_queries:
+                explore_params = query.get('explore_params', {})
+                explore_params['model'] = model_name
+                explore_params['view'] = explore_name
+                query_link = query.get('original_query_url', '')
+                rows_to_insert.append({
+                    'id': str(uuid.uuid4()),
+                    'explore_id': explore_key,
+                    'input': query['input'],
+                    'output': json.dumps(explore_params),
+                    'created_at': current_timestamp,
+                    'user_email': user_email or 'system',
+                    'query_run_count': query.get('query_run_count', 1),
+                    'link': query_link
+                })
+            table = client.get_table(bronze_table_id)
+            errors = client.insert_rows_json(table, rows_to_insert)
+            if errors:
+                logging.error(f"BigQuery insertion errors: {errors}")
+                raise Exception(f"Failed to store bronze queries: {errors}")
+            logging.info(f"Successfully stored {len(bronze_queries)} bronze queries for {explore_key}")
+            return {
+                'success': True,
+                'message': f'Successfully generated {len(bronze_queries)} bronze queries for {explore_key}',
+                'queries_generated': len(bronze_queries),
+                'explore_key': explore_key
+            }
+        except Exception as e:
+            logging.error(f"Bronze query generation failed: {e}")
+            logging.error(f"Traceback: {traceback.format_exc()}")
+            return {
+                'success': False,
+                'message': f'Failed to generate bronze queries: {str(e)}',
+                'queries_generated': 0,
+                'explore_key': explore_key
+            }
+            current_timestamp = datetime.now().isoformat()  # Convert to ISO format string
+            
+            for query in bronze_queries:
+                # Create explore params dict that includes model and view
+                explore_params = query.get('explore_params', {})
+                explore_params['model'] = model_name
+                explore_params['view'] = explore_name
+                
+                # Use the /x/{slug} link directly
+                query_link = query.get('original_query_url', '')
+                
+                rows_to_insert.append({
+                    'id': str(uuid.uuid4()),  # Generate unique ID
+                    'explore_id': explore_key,  # Use standardized field name
+                    'input': query['input'],  # Use standardized field name
+                    'output': json.dumps(explore_params),  # Store explore params as JSON in output field
+                    'created_at': current_timestamp,  # Use ISO format timestamp string
+                    'user_email': user_email or 'system',
+                    'query_run_count': query.get('query_run_count', 1),
+                    'link': query_link  # Store the /x/{slug} link directly
+                })
+            
+            # Insert the data
+            table = client.get_table(bronze_table_id)
+            errors = client.insert_rows_json(table, rows_to_insert)
+            
+            if errors:
+                logging.error(f"BigQuery insertion errors: {errors}")
+                raise Exception(f"Failed to store bronze queries: {errors}")
+            
+            logging.info(f"Successfully stored {len(bronze_queries)} bronze queries for {explore_key}")
+            
+        except Exception as bq_error:
+            logging.error(f"BigQuery storage failed: {bq_error}")
+            raise Exception(f"Failed to store bronze queries: {bq_error}")
+        
+        return {
+            'success': True,
+            'message': f'Successfully generated {len(bronze_queries)} bronze queries for {explore_key}',
+            'queries_generated': len(bronze_queries),
+            'explore_key': explore_key
+        }
+        
+    except Exception as e:
+        logging.error(f"Bronze query generation failed: {e}")
+        logging.error(f"Traceback: {traceback.format_exc()}")
+        return {
+            'success': False,
+            'message': f'Failed to generate bronze queries: {str(e)}',
+            'queries_generated': 0,
+            'explore_key': explore_key
+        }
 
 def create_mcp_flask_app():
     """Create Flask app with MCP endpoints"""
@@ -2422,6 +3064,155 @@ def create_mcp_flask_app():
             logging.error(f"Error getting promotion history: {e}")
             return jsonify({'error': str(e)}), 500, get_response_headers()
 
+    @app.route("/admin/delete-bronze-query", methods=["POST", "OPTIONS"])
+    def delete_bronze_query():
+        """Delete a bronze query by ID"""
+        logging.info(f"Received {request.method} request to delete bronze query")
+        
+        if request.method == "OPTIONS":
+            response = Response()
+            response.headers.update(get_response_headers())
+            response.status_code = 200
+            return response
+        
+        try:
+            # Get Bearer token from Authorization header
+            auth_header = request.headers.get("Authorization")
+            if not auth_header or not auth_header.lower().startswith("bearer "):
+                return jsonify({'error': 'Missing or invalid Authorization header'}), 401, get_response_headers()
+            
+            # Extract and validate user
+            user_email = extract_user_email_from_token(auth_header)
+            if not user_email:
+                return jsonify({'error': 'Token validation failed'}), 401, get_response_headers()
+            
+            logging.info(f"User {user_email} attempting to delete bronze query")
+            
+            # Check if user is authorized for promotion (same authorization for deletion)
+            if not is_authorized_for_promotion(user_email):
+                return jsonify({'error': 'Unauthorized for query deletion'}), 403, get_response_headers()
+            
+            # Get request data
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'Missing request body'}), 400, get_response_headers()
+            
+            # Handle both camelCase and snake_case field names for compatibility
+            query_id = data.get('query_id') or data.get('queryId') or data.get('id')
+            
+            logging.info(f"Delete bronze request data: {data}")
+            logging.info(f"Extracted query_id: {query_id}")
+            
+            if not query_id:
+                return jsonify({'error': 'query_id is required'}), 400, get_response_headers()
+            
+            logging.info(f"Starting deletion of bronze query with id: '{query_id}'")
+            
+            # Perform deletion
+            result = delete_bronze_query_by_id(query_id, user_email)
+            
+            # Log the result for debugging
+            logging.info(f"Delete bronze operation result: {result}")
+            
+            if result['success']:
+                return jsonify(result), 200, get_response_headers()
+            else:
+                return jsonify(result), 404, get_response_headers()
+            
+        except Exception as e:
+            logging.error(f"Bronze query deletion failed: {e}")
+            logging.error(f"Traceback: {traceback.format_exc()}")
+            return jsonify({'error': str(e)}), 500, get_response_headers()
+
+    @app.route("/admin/delete-silver-query", methods=["POST", "OPTIONS"])
+    def delete_silver_query():
+        """Delete a silver query by input text"""
+        logging.info(f"Received {request.method} request to delete silver query")
+        
+        if request.method == "OPTIONS":
+            response = Response()
+            response.headers.update(get_response_headers())
+            response.status_code = 200
+            return response
+        
+        try:
+            # Get Bearer token from Authorization header
+            auth_header = request.headers.get("Authorization")
+            if not auth_header or not auth_header.lower().startswith("bearer "):
+                logging.error("Missing or invalid Authorization header")
+                return jsonify({'error': 'Missing or invalid Authorization header'}), 401, get_response_headers()
+            
+            # Extract and validate user
+            user_email = extract_user_email_from_token(auth_header)
+            if not user_email:
+                logging.error("Token validation failed")
+                return jsonify({'error': 'Token validation failed'}), 401, get_response_headers()
+            
+            logging.info(f"User {user_email} attempting to delete silver query")
+            
+            # Check if user is authorized for promotion (same authorization for deletion)
+            if not is_authorized_for_promotion(user_email):
+                logging.error(f"User {user_email} is not authorized for silver query deletion")
+                return jsonify({'error': 'Unauthorized for silver query deletion'}), 403, get_response_headers()
+            
+            # Get request data
+            data = request.get_json()
+            if not data:
+                logging.error("Missing request body")
+                return jsonify({'error': 'Missing request body'}), 400, get_response_headers()
+            
+            # Handle both camelCase and snake_case field names for compatibility
+            query_id = data.get('query_id') or data.get('queryId') or data.get('id')
+            
+            logging.info(f"Delete request data: {data}")
+            logging.info(f"Extracted query_id: {query_id}")
+            
+            if not query_id:
+                logging.error(f"Missing required field - query_id: {query_id}")
+                return jsonify({'error': 'query_id is required'}), 400, get_response_headers()
+            
+            logging.info(f"Starting deletion of silver query with id: '{query_id}'")
+            
+            # Perform deletion
+            result = delete_silver_query_by_id(query_id, user_email)
+            
+            # Log the result for debugging
+            logging.info(f"Delete operation result: {result}")
+            
+            if result['success']:
+                logging.info(f"Successfully deleted silver query with id: '{query_id}'. Affected rows: {result['affected_rows']}")
+                return jsonify({
+                    'success': True,
+                    'affected_rows': result['affected_rows'],
+                    'query_id': query_id,
+                    'deleted_by': user_email,
+                    'message': result['message']
+                }), 200, get_response_headers()
+            else:
+                # Check if it's a "not found" case vs an actual error
+                if 'No queries found' in result.get('message', ''):
+                    logging.warning(f"No silver query found with id: '{query_id}'")
+                    return jsonify({
+                        'success': False,
+                        'affected_rows': 0,
+                        'query_id': query_id,
+                        'message': result['message']
+                    }), 404, get_response_headers()
+                else:
+                    # Actual error case
+                    logging.error(f"Error during silver query deletion: {result['message']}")
+                    return jsonify({
+                        'success': False,
+                        'affected_rows': 0,
+                        'query_id': query_id,
+                        'message': result['message']
+                    }), 500, get_response_headers()
+            
+        except Exception as e:
+            logging.error(f"Silver query deletion failed: {e}")
+            logging.error(f"Traceback: {traceback.format_exc()}")
+            return jsonify({'error': str(e)}), 500, get_response_headers()
+
     @app.route("/health", methods=["GET"])
     def health_check():
         """Health check endpoint"""
@@ -2432,7 +3223,15 @@ def create_mcp_flask_app():
             'project': project,
             'location': location,
             'model': vertex_model,
-            'endpoints': ['/ (POST)', '/health (GET)', '/vertex-passthrough (POST)']
+            'endpoints': [
+                '/ (POST)', 
+                '/health (GET)', 
+                '/vertex-passthrough (POST)',
+                '/admin/queries/<table_name> (GET)',
+                '/admin/promote (POST)',
+                '/admin/promotion-history (GET)',
+                '/admin/delete-silver-query (POST)'
+            ]
         }), 200, get_response_headers()
     
     logging.info("Registered endpoint: /health")

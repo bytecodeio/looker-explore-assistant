@@ -157,9 +157,65 @@ export const useQueryPromotion = () => {
     }
   }, [callPromotionAPI])
 
+  const deleteSilverQuery = useCallback(async (queryId: string): Promise<{ success: boolean; message: string; affected_rows: number }> => {
+    try {
+      const endpoint = '/admin/delete-silver-query'
+      const payload = {
+        query_id: queryId
+      }
+
+      console.log('Deleting silver query with payload:', payload)
+      console.log('Using endpoint:', endpoint)
+
+      const result = await callPromotionAPI(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+
+      console.log('Silver query deleted successfully:', result)
+      return {
+        success: result.success || false,
+        message: result.message || 'Unknown response',
+        affected_rows: result.affected_rows || 0
+      }
+    } catch (error) {
+      console.error('Error deleting silver query:', error)
+      throw error
+    }
+  }, [callPromotionAPI])
+
+  const deleteBronzeQuery = useCallback(async (queryId: string): Promise<{ success: boolean; message: string; affected_rows: number }> => {
+    try {
+      const endpoint = '/admin/delete-bronze-query'
+      const payload = {
+        query_id: queryId
+      }
+
+      console.log('Deleting bronze query with payload:', payload)
+      console.log('Using endpoint:', endpoint)
+
+      const result = await callPromotionAPI(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+
+      console.log('Bronze query deleted successfully:', result)
+      return {
+        success: result.success || false,
+        message: result.message || 'Unknown response',
+        affected_rows: result.affected_rows || 0
+      }
+    } catch (error) {
+      console.error('Error deleting bronze query:', error)
+      throw error
+    }
+  }, [callPromotionAPI])
+
   return {
     getQueriesForPromotion,
     promoteQuery,
-    getPromotionHistory
+    getPromotionHistory,
+    deleteSilverQuery,
+    deleteBronzeQuery
   }
 }

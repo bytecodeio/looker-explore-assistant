@@ -1,0 +1,13 @@
+[project]
+name = "explore-assistant-vector-mcp"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "chromadb>=1.0.15",
+    "google-cloud-bigquery>=3.35.1",
+    "looker-sdk>=25.10.0",
+    "mcp[cli]>=1.12.3",
+    "sentence-transformers>=5.0.0",
+]
