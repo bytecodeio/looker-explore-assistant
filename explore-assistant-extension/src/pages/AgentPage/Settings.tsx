@@ -295,7 +295,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     dispatch(setSetting({ id, value }));
     
     // Only persist specific settings to extension context
-    const persistableSettings = ['google_oauth_client_id', 'bigquery_example_looker_model_name', 'cloud_run_service_url', 'vertex_model', 'external_oauth_connection_id']
+    const persistableSettings = ['google_oauth_client_id', 'bigquery_example_looker_model_name', 'cloud_run_service_url', 'vertex_model', 'external_oauth_connection_id', 'vertex_temperature', 'vertex_top_p', 'vertex_top_k']
     
     if (persistableSettings.includes(id)) {
       try {
@@ -321,7 +321,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
   const handleTestAndSave = async () => {
     try {
       // Save all persistable settings to context as a complete set
-      const persistableSettings = ['google_oauth_client_id', 'bigquery_example_looker_model_name', 'cloud_run_service_url', 'vertex_model', 'external_oauth_connection_id']
+      const persistableSettings = ['google_oauth_client_id', 'bigquery_example_looker_model_name', 'cloud_run_service_url', 'vertex_model', 'external_oauth_connection_id', 'vertex_temperature', 'vertex_top_p', 'vertex_top_k']
       const allSettingsToSave: Record<string, any> = {}
       
       persistableSettings.forEach(settingId => {
@@ -373,7 +373,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     id === 'bigquery_example_looker_model_name' ||
     id === 'cloud_run_service_url' ||
     id === 'vertex_model' ||
-    id === 'external_oauth_connection_id'
+    id === 'external_oauth_connection_id' ||
+    id === 'vertex_temperature' ||
+    id === 'vertex_top_p' ||
+    id === 'vertex_top_k'
   )
 
   return (

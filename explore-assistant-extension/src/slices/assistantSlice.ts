@@ -250,6 +250,21 @@ export const initialState: AssistantState = {
       name: 'External OAuth Connection ID',
       description: 'The connection ID for external OAuth authentication in Looker. Can be found using the accounts link and investigating the log in or reauthenticate button hyperlink for an integer at the end of the URL context.',
       value: '',
+    },
+    vertex_temperature: {
+      name: 'Temperature',
+      description: 'Controls randomness in AI responses (0.0-2.0). Lower values make responses more focused and deterministic. Used only for explore parameter generation.',
+      value: '0.1',
+    },
+    vertex_top_p: {
+      name: 'Top P',
+      description: 'Controls diversity via nucleus sampling (0.0-1.0). Lower values make responses more focused. Used only for explore parameter generation.',
+      value: '0.5',
+    },
+    vertex_top_k: {
+      name: 'Top K',
+      description: 'Limits the number of token choices (1-40). Lower values make responses more focused. Used only for explore parameter generation.',
+      value: '20',
     }
   },
   isBigQueryMetadataLoaded: false,

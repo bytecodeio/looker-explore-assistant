@@ -14,6 +14,9 @@ const useSendCloudRunMessage = () => {
   const CLOUD_RUN_URL = settings['cloud_run_service_url']?.value as string || ''
   const identityToken = settings['identity_token']?.value as string || ''
   const vertexModel = settings['vertex_model']?.value as string || 'gemini-2.0-flash'
+  const vertexTemperature = parseFloat(settings['vertex_temperature']?.value as string || '0.1')
+  const vertexTopP = parseFloat(settings['vertex_top_p']?.value as string || '0.5')
+  const vertexTopK = parseInt(settings['vertex_top_k']?.value as string || '20')
 
   const callCloudRunAPI = async (payload: any) => {
     if (!CLOUD_RUN_URL) {
@@ -100,13 +103,20 @@ const useSendCloudRunMessage = () => {
           vertex_model: vertexModel,
           test_mode: false,
           // Area context for explore restriction
-          restricted_explore_keys: restrictedExploreKeys
+          restricted_explore_keys: restrictedExploreKeys,
+          // Vertex AI generation config for explore parameter generation only
+          vertex_temperature: vertexTemperature,
+          vertex_top_p: vertexTopP,
+          vertex_top_k: vertexTopK
         }
 
         console.log('Sending payload to Cloud Run:', {
           prompt: payload.prompt,
           conversation_id: payload.conversation_id,
           vertex_model: payload.vertex_model,
+          vertex_temperature: payload.vertex_temperature,
+          vertex_top_p: payload.vertex_top_p,
+          vertex_top_k: payload.vertex_top_k,
           selected_explores: selectedExplores,
           restricted_explore_keys: payload.restricted_explore_keys,
           // Log structure info without full content to avoid console clutter
@@ -127,7 +137,7 @@ const useSendCloudRunMessage = () => {
         throw error
       }
     },
-    [examples, semanticModels, CLOUD_RUN_URL, identityToken, currentExploreThread, history, selectedExplores, availableAreas],
+    [examples, semanticModels, CLOUD_RUN_URL, identityToken, currentExploreThread, history, selectedExplores, availableAreas, vertexTemperature, vertexTopP, vertexTopK],
   )
 
   // Test function for Cloud Run settings

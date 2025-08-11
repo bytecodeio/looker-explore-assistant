@@ -883,7 +883,8 @@ Response format: Return only the explore key as plain text (no JSON, no explanat
 
 def generate_explore_params(auth_header: str, prompt: str, explore_key: str, 
                           golden_queries: Dict[str, Any], semantic_models: Dict[str, Any],
-                          current_explore: Dict[str, Any], conversation_context: str = "") -> Optional[Dict[str, Any]]:
+                          current_explore: Dict[str, Any], conversation_context: str = "", 
+                          generation_config: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """Enhanced parameter generation with two-step LLM approach for better conversation context handling"""
     try:
         logging.info(f"=== GENERATE_EXPLORE_PARAMS START ===")
@@ -918,7 +919,7 @@ def generate_explore_params(auth_header: str, prompt: str, explore_key: str,
         
         # Step 2: Generate explore parameters using the synthesized query
         result = generate_explore_params_from_query(auth_header, synthesized_query, explore_key, 
-                                                golden_queries, semantic_models, current_explore)
+                                                golden_queries, semantic_models, current_explore, generation_config)
         
         logging.info(f"=== GENERATE_EXPLORE_PARAMS RESULT ===")
         if result:
@@ -1052,7 +1053,7 @@ Output only the synthesized query."""
 
 def generate_explore_params_from_query(auth_header: str, query: str, explore_key: str, 
                                      golden_queries: Dict[str, Any], semantic_models: Dict[str, Any],
-                                     current_explore: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+                                     current_explore: Dict[str, Any], generation_config: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """Second LLM call: Generate explore parameters from a clear, synthesized query"""
     try:
         # Get semantic model for this specific explore only (optimized for token efficiency)
@@ -1186,9 +1187,9 @@ Vis types: single_value, table, looker_grid, looker_column, looker_bar, looker_l
                 }
             ],
             "generationConfig": {
-                "temperature": 0.1,
-                "topP": 0.5,
-                "topK": 20,
+                "temperature": generation_config.get('temperature', 0.1) if generation_config else 0.1,
+                "topP": generation_config.get('topP', 0.5) if generation_config else 0.5,
+                "topK": generation_config.get('topK', 20) if generation_config else 20,
                 "maxOutputTokens": max_output_tokens,  # Dynamic based on model and prompt
                 "responseMimeType": "application/json",
                 "candidateCount": 1
@@ -1196,10 +1197,14 @@ Vis types: single_value, table, looker_grid, looker_column, looker_bar, looker_l
         }
         
         # Log concise request summary for debugging
+        temp = generation_config.get('temperature', 0.1) if generation_config else 0.1
+        top_p = generation_config.get('topP', 0.5) if generation_config else 0.5
+        top_k = generation_config.get('topK', 20) if generation_config else 20
         logging.info(f"🤖 LLM Request - Explore: {explore_key} | Query: '{query[:100]}{'...' if len(query) > 100 else ''}' | "
                     f"Fields: {len(limited_dimensions)} dims, {len(limited_measures)} measures | "
                     f"Examples: {len(golden_queries.get('exploreGenerationExamples', {}).get(explore_key, []))} | "
-                    f"Prompt: {len(system_prompt):,} chars | MaxTokens: {max_output_tokens}")
+                    f"Prompt: {len(system_prompt):,} chars | MaxTokens: {max_output_tokens} | "
+                    f"Temp: {temp} | TopP: {top_p} | TopK: {top_k}")
         
         # Call Vertex AI using service account with retry logic (includes response processing)
         vertex_response = call_vertex_ai_with_retry(vertex_request, "explore_parameter_generation", process_response=True)
@@ -1378,6 +1383,22 @@ def process_explore_assistant_request(auth_header: str, request_data: Dict[str, 
         selected_area = request_data.get('selected_area', None)
         restricted_explore_keys = request_data.get('restricted_explore_keys', [])
         
+        # Extract Vertex AI generation config parameters (for explore parameter generation only)
+        vertex_temperature = float(request_data.get('vertex_temperature', 0.1))
+        vertex_top_p = float(request_data.get('vertex_top_p', 0.5))
+        vertex_top_k = int(request_data.get('vertex_top_k', 20))
+        
+        # Validate parameter ranges
+        vertex_temperature = max(0.0, min(2.0, vertex_temperature))  # Clamp to valid range
+        vertex_top_p = max(0.0, min(1.0, vertex_top_p))  # Clamp to valid range  
+        vertex_top_k = max(1, min(40, vertex_top_k))  # Clamp to valid range
+        
+        generation_config = {
+            'temperature': vertex_temperature,
+            'topP': vertex_top_p,
+            'topK': vertex_top_k
+        }
+        
         # Filter both golden queries AND semantic models if restrictions exist
         filtered_golden_queries = golden_queries
         filtered_semantic_models = semantic_models
@@ -1509,7 +1530,8 @@ def process_explore_assistant_request(auth_header: str, request_data: Dict[str, 
         # Generate explore parameters using the determined explore with optimized context
         result = generate_explore_params(
             auth_header, prompt, determined_explore_key, 
-            chosen_explore_golden_queries, chosen_explore_semantic_models, current_explore, conversation_context
+            chosen_explore_golden_queries, chosen_explore_semantic_models, current_explore, conversation_context,
+            generation_config
         )
         
         if not result:
