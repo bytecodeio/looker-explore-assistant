@@ -8,6 +8,7 @@ WORKDIR /app
 COPY requirements.txt ./
 COPY mcp_server.py ./
 COPY llm_utils.py ./
+COPY looker_reference.py ./
 
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
