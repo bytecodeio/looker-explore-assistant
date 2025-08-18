@@ -1245,6 +1245,12 @@ def generate_explore_params_from_query(auth_header: str, query: str, explore_key
         
     except Exception as e:
         logging.error(f"Error generating explore params from query: {e}")
+        logging.error(f"Error type: {type(e)}")
+        logging.error(f"Traceback: {traceback.format_exc()}")
+        if 'vertex_response' in locals():
+            logging.error(f"Vertex response: {vertex_response}")
+        if 'response_text' in locals():
+            logging.error(f"Response text: {response_text}")
         return None
 
 def create_context_aware_fallback(prompt: str, explore_key: str, conversation_context: str, semantic_models: Dict[str, Any]) -> Dict[str, Any]:

@@ -94,14 +94,14 @@ For customizing Cartesian charts (column, bar, line):
    Using `series.formatters` with `select` and `style` attributes:
    
    ```json
-   {
-     "series": [{
-       "formatters": [{
+   {{
+     "series": [{{
+       "formatters": [{{
          "select": "value > 380", 
-         "style": {"color": "#FF9900"}
-       }]
-     }]
-   }
+         "style": {{"color": "#FF9900"}}
+       }}]
+     }}]
+   }}
    ```
 
    Select options:
@@ -124,16 +124,16 @@ def get_system_prompt_template(explore_key: str) -> str:
     Returns:
         System prompt template string with placeholders for query, table_context, and example_text
     """
-    return f"""# Looker Explore Parameter Generation
+    template = """# Looker Explore Parameter Generation
 
 ## Task
-Generate Looker explore parameters for: "{{query}}"
+Generate Looker explore parameters for: "{query}"
 
-{LOOKER_API_DOCUMENTATION}
+""" + LOOKER_API_DOCUMENTATION + """
 
-{{table_context}}
+{table_context}
 
-{{example_text}}
+{example_text}
 
 ## Instructions
 1. Choose only fields from the Available Dimensions and Measures above
@@ -146,7 +146,7 @@ Generate Looker explore parameters for: "{{query}}"
 ## Response Format
 Return ONLY this JSON structure:
 {{
-  "explore_key": "{explore_key}",
+  "explore_key": \"""" + explore_key + """\",
   "explore_params": {{
     "fields": ["field1", "field2"],
     "filters": {{}},
@@ -158,3 +158,4 @@ Return ONLY this JSON structure:
   "summary": "Brief description"
 }}
 """
+    return template
