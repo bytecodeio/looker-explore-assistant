@@ -30,6 +30,7 @@ class OlympicMigrationManager:
         self.project_id = project_id
         self.dataset_id = dataset_id
         self.legacy_tables = ['bronze_queries', 'silver_queries', 'golden_queries']
+        self.tables_to_archive = ['bronze_queries', 'silver_queries']  # golden_queries should be preserved
         self.olympic_table = 'olympic_queries'
         self.looker_base_url = os.environ.get("LOOKERSDK_BASE_URL", "https://bytecodeef.looker.com")
         
@@ -761,11 +762,12 @@ class OlympicMigrationManager:
         return verification
     
     def _archive_legacy_tables(self):
-        """Archive legacy tables with timestamp suffix instead of dropping them."""
+        """Archive legacy tables with timestamp suffix instead of dropping them. 
+        Note: golden_queries table is preserved and not archived."""
         archive_suffix = f"_archived_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         archived_tables = []
         
-        for table_name in self.legacy_tables:
+        for table_name in self.tables_to_archive:
             try:
                 source_ref = self.bq_client.dataset(self.dataset_id).table(table_name)
                 self.bq_client.get_table(source_ref)  # Check if exists
@@ -789,6 +791,9 @@ class OlympicMigrationManager:
             except Exception as e:
                 logger.error(f"Error archiving {table_name}: {str(e)}")
                 continue
+        
+        # Log that golden_queries is being preserved
+        logger.info("✅ golden_queries table preserved - not archived during migration")
         
         return archived_tables
     
