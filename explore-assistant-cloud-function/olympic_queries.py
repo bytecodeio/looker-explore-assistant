@@ -36,7 +36,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Environment configuration  
-BQ_PROJECT_ID = os.environ.get("BQ_PROJECT_ID", "ml-accelerator-dbarr")
+BQ_PROJECT_ID = os.environ.get("BQ_PROJECT_ID", "your-bigquery-project-id")
 DATASET_ID = os.environ.get("BQ_DATASET_ID", "explore_assistant")
 OLYMPIC_QUERIES_TABLE = "olympic_queries"
 

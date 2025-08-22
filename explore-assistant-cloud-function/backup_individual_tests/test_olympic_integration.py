@@ -25,8 +25,8 @@ async def test_olympic_query_management():
     """Test Olympic Query Management functionality"""
     
     # Set environment variables for testing
-    os.environ["PROJECT"] = "combined-genai-bi"
-    os.environ["BQ_PROJECT_ID"] = "ml-accelerator-dbarr"
+    os.environ["PROJECT"] = "your-gcp-project-id"
+    os.environ["BQ_PROJECT_ID"] = "your-bigquery-project-id"
     os.environ["BQ_DATASET_ID"] = "explore_assistant"
     
     server = LookerExploreAssistantMCPServer()

@@ -55,5 +55,5 @@ def test_model_names():
             print(f"❌ {model}: ERROR - {str(e)[:100]}")
 
 if __name__ == "__main__":
-    os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "ml-accelerator-dbarr")
+    os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "your-gcp-project-id")
     test_model_names()

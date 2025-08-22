@@ -6,7 +6,7 @@ from google.cloud import bigquery
 def test_embedding_syntax():
     """Test different BigQuery embedding syntax options"""
     
-    project_id = os.environ.get("PROJECT", "ml-accelerator-dbarr")
+    project_id = os.environ.get("PROJECT", "your-gcp-project-id")
     dataset_id = os.environ.get("BQ_DATASET_ID", "explore_assistant")
     
     client = bigquery.Client(project=project_id)

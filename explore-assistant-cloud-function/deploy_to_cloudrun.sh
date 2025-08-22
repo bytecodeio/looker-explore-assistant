@@ -19,7 +19,7 @@ if [[ ! -f "mcp_server.py" || ! -f "requirements.txt" || ! -f "Dockerfile" ]]; t
 fi
 
 # Configuration variables - Modify these before running
-PROJECT_ID="combined-genai-bi"  # Replace with your GCP project ID
+PROJECT_ID="your-gcp-project-id"  # Replace with your GCP project ID
 REGION="us-central1"  # Replace with your preferred region
 SERVICE_NAME="looker-explore-assistant-mcp"
 IMAGE_NAME="looker-explore-assistant-mcp"

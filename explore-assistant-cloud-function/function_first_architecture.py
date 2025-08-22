@@ -242,5 +242,5 @@ async def demo_function_first_architecture():
 
 if __name__ == "__main__":
     import os
-    os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "ml-accelerator-dbarr")
+    os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "your-gcp-project-id")
     asyncio.run(demo_function_first_architecture())

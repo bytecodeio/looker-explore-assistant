@@ -20,6 +20,7 @@ import traceback
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Tuple
+from urllib.parse import urlencode
 
 from flask import Flask, request, Response, jsonify, Blueprint
 from flask_cors import CORS
@@ -52,7 +53,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Global configuration
-BQ_PROJECT_ID = os.environ.get("BQ_PROJECT_ID", "bytecode-analysis")
+BQ_PROJECT_ID = os.environ.get("BQ_PROJECT_ID", "your-bigquery-project-id")
 BQ_DATASET_ID = os.environ.get("BQ_DATASET_ID", "looker_scratch")
 
 
@@ -63,6 +64,46 @@ class RestfulBackendError(Exception):
         self.status_code = status_code
         self.details = details or {}
         super().__init__(self.message)
+
+
+def _construct_looker_explore_url(explore_id: str, generated_params: dict) -> str:
+    """
+    Construct a proper Looker explore URL from explore_id and parameters.
+    
+    Args:
+        explore_id: In format "model:explore"
+        generated_params: Dictionary of explore parameters
+        
+    Returns:
+        str: Complete Looker explore URL with parameters
+    """
+    try:
+        # Parse explore_id to get model and explore names
+        if ':' in explore_id:
+            model_name, explore_name = explore_id.split(':', 1)
+        else:
+            logger.warning(f"Invalid explore_id format: {explore_id}")
+            return ""
+        
+        # Create a temporary Olympic migration manager instance for link generation
+        migration_manager = OlympicMigrationManager(
+            project_id=BQ_PROJECT_ID,
+            dataset_id=BQ_DATASET_ID
+        )
+        
+        # Generate the proper Looker URL
+        looker_url = migration_manager._generate_looker_link(
+            model_name=model_name,
+            explore_name=explore_name,
+            explore_params=generated_params
+        )
+        
+        logger.info(f"Generated Looker URL: {looker_url}")
+        return looker_url or ""
+        
+    except Exception as e:
+        logger.error(f"Failed to construct Looker explore URL: {e}")
+        return ""
 
 
 def create_app() -> Flask:
@@ -353,6 +394,11 @@ def _register_blueprints(app: Flask) -> None:
         try:
             data = request.get_json(force=True)
             
+            # Extract user info from auth header
+            auth_header = request.headers.get('Authorization', '')
+            user_info = extract_user_info_from_token(auth_header)
+            user_email = user_info.get('email') or user_info.get('user_id') or 'unknown'
+            
             # Extract required fields
             query_id = data.get('query_id')
             user_input = data.get('user_input') 
@@ -364,14 +410,15 @@ def _register_blueprints(app: Flask) -> None:
                 raise RestfulBackendError("query_id, user_input, and response are required", 400)
             
             # Store positive feedback in Olympic system
+            # Use user_email field which already exists in table
             app.olympic_manager.add_feedback_query(
                 explore_id=explore_key or "unknown",
                 original_prompt=user_input,
                 generated_params=json.loads(response) if isinstance(response, str) else response,
-                link="",
+                share_url="",
                 feedback_type="positive",
-                user_email="unknown",
-                feedback_notes=feedback_notes
+                user_email=user_email,  # This will be mapped to user_email internally if needed
+                user_comment=feedback_notes
             )
             
             return jsonify({
@@ -391,6 +438,11 @@ def _register_blueprints(app: Flask) -> None:
         
         try:
             data = request.get_json(force=True)
+            
+            # Extract user info from auth header
+            auth_header = request.headers.get('Authorization', '')
+            user_info = extract_user_info_from_token(auth_header)
+            user_email = user_info.get('email') or user_info.get('user_id') or 'unknown'
             
             # Extract required fields
             query_id = data.get('query_id')
@@ -413,10 +465,10 @@ def _register_blueprints(app: Flask) -> None:
                 explore_id=explore_key or "unknown",
                 original_prompt=user_input,
                 generated_params=json.loads(response) if isinstance(response, str) else response,
-                link="",
+                share_url="",
                 feedback_type="negative", 
-                user_email="unknown",
-                feedback_notes=feedback_notes
+                user_email=user_email,
+                user_comment=feedback_notes
             )
             
             return jsonify({
@@ -427,6 +479,167 @@ def _register_blueprints(app: Flask) -> None:
         except Exception as e:
             logger.error(f"Negative feedback submission error: {traceback.format_exc()}")
             return _handle_api_error(RestfulBackendError(f"Failed to submit negative feedback: {str(e)}", 500))
+
+    @api_v1.route('/feedback', methods=['POST', 'OPTIONS'])
+    def submit_general_feedback():
+        """Submit general feedback for a query (supports all feedback types)"""
+        if request.method == 'OPTIONS':
+            return _handle_cors()
+        
+        try:
+            data = request.get_json(force=True)
+            
+            # Extract user info from auth header
+            auth_header = request.headers.get('Authorization', '')
+            user_info = extract_user_info_from_token(auth_header)
+            user_email = user_info.get('email') or user_info.get('user_id') or 'unknown'
+            
+            # Extract required fields
+            explore_id = data.get('explore_id')
+            original_prompt = data.get('original_prompt')
+            generated_params = data.get('generated_params')
+            share_url = data.get('share_url', '')
+            feedback_type = data.get('feedback_type')
+            user_comment = data.get('user_comment', '')
+            suggested_improvements = data.get('suggested_improvements')
+            issues = data.get('issues', [])
+            query_id = data.get('query_id')
+            
+            # Debug logging to check share_url
+            logger.info(f"DEBUG: Received share_url: {share_url}")
+            logger.info(f"DEBUG: Generated params: {type(generated_params)} - {generated_params}")
+            
+            if not all([explore_id, original_prompt, feedback_type]):
+                raise RestfulBackendError("explore_id, original_prompt, and feedback_type are required", 400)
+            
+            # Convert generated_params to dict if it's a string
+            params_dict = generated_params if isinstance(generated_params, dict) else json.loads(generated_params) if generated_params else {}
+            
+            # Construct proper Looker explore URL from the parameters
+            constructed_share_url = _construct_looker_explore_url(explore_id, params_dict)
+            if constructed_share_url:
+                share_url = constructed_share_url
+                logger.info(f"Using constructed share_url: {share_url}")
+            else:
+                logger.warning(f"Failed to construct URL, using provided share_url: {share_url}")
+            
+            # Prepare feedback notes based on type
+            feedback_notes = user_comment
+            if feedback_type == 'negative' and issues:
+                feedback_notes = f"Issues: {', '.join(issues)}"
+                if user_comment:
+                    feedback_notes += f"\nComment: {user_comment}"
+                if suggested_improvements:
+                    feedback_notes += f"\nSuggestions: {suggested_improvements}"
+            elif suggested_improvements and isinstance(suggested_improvements, str):
+                if feedback_notes:
+                    feedback_notes += f"\nSuggestions: {suggested_improvements}"
+                else:
+                    feedback_notes = f"Suggestions: {suggested_improvements}"
+            
+            # Store feedback in Olympic system
+            app.olympic_manager.add_feedback_query(
+                explore_id=explore_id,
+                original_prompt=original_prompt,
+                generated_params=params_dict,
+                share_url=share_url,
+                feedback_type=feedback_type,
+                user_email=user_email,
+                user_comment=feedback_notes,
+                query_id=query_id
+            )
+            
+            return jsonify({
+                "success": True,
+                "status": "success",
+                "message": f"{feedback_type.capitalize()} feedback submitted successfully"
+            })
+            
+        except Exception as e:
+            logger.error(f"General feedback submission error: {traceback.format_exc()}")
+            return _handle_api_error(RestfulBackendError(f"Failed to submit feedback: {str(e)}", 500))
+
+    @api_v1.route('/feedback/history', methods=['GET', 'OPTIONS'])
+    def get_feedback_history():
+        """Get feedback history with optional filters"""
+        if request.method == 'OPTIONS':
+            return _handle_cors()
+        
+        try:
+            # Get query parameters
+            explore_id = request.args.get('explore_id')
+            user_id = request.args.get('user_id')
+            feedback_type = request.args.get('feedback_type')
+            limit = int(request.args.get('limit', 20))
+            
+            # For now, return mock data since there's no specific history method in Olympic manager
+            # This would need to be implemented in the Olympic system
+            history = []
+            
+            return jsonify({
+                "success": True,
+                "data": history,
+                "feedback_history": history,  # For backward compatibility
+                "total": len(history)
+            })
+            
+        except Exception as e:
+            logger.error(f"Feedback history error: {traceback.format_exc()}")
+            return _handle_api_error(RestfulBackendError(f"Failed to get feedback history: {str(e)}", 500))
+
+    @api_v1.route('/feedback/stats', methods=['GET', 'OPTIONS'])
+    def get_feedback_stats():
+        """Get feedback statistics"""
+        if request.method == 'OPTIONS':
+            return _handle_cors()
+        
+        try:
+            # Use Olympic manager to get query stats (which includes feedback data)
+            stats = app.olympic_manager.get_query_stats() if hasattr(app.olympic_manager, 'get_query_stats') else {}
+            
+            return jsonify({
+                "success": True,
+                "data": stats,
+                "query_statistics": stats  # For backward compatibility
+            })
+            
+        except Exception as e:
+            logger.error(f"Feedback stats error: {traceback.format_exc()}")
+            return _handle_api_error(RestfulBackendError(f"Failed to get feedback stats: {str(e)}", 500))
+
+    @api_v1.route('/areas', methods=['GET', 'OPTIONS'])
+    def get_areas():
+        """Get available areas from BigQuery"""
+        if request.method == 'OPTIONS':
+            return _handle_cors()
+        
+        try:
+            # Get areas from BigQuery
+            query = f"""
+            SELECT DISTINCT area, explore_key, description
+            FROM `{BQ_PROJECT_ID}.explore_assistant.areas`
+            ORDER BY area
+            """
+            
+            results = list(app.bq_client.query(query))
+            areas_data = [
+                {
+                    "area": row.area,
+                    "explore_key": row.explore_key, 
+                    "description": row.description
+                }
+                for row in results
+            ]
+            
+            return jsonify({
+                "success": True,
+                "data": areas_data,
+                "areas": areas_data  # For compatibility with frontend expectations
+            })
+            
+        except Exception as e:
+            logger.error(f"Areas query error: {traceback.format_exc()}")
+            return _handle_api_error(RestfulBackendError(f"Failed to get areas: {str(e)}", 500))
     
     # Register the blueprint
     app.register_blueprint(api_v1)
@@ -635,7 +848,7 @@ def _register_admin_endpoints(app: Flask) -> None:
                 input_text=input_text,
                 output_data=output_data,
                 link=link,
-                user_id=user_id,
+                user_email=user_email,
                 feedback_type=feedback_type,
                 conversation_history=data.get('conversation_history')
             )

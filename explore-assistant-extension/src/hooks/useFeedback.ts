@@ -73,41 +73,8 @@ export const useFeedback = () => {
   const CLOUD_RUN_URL = settings['cloud_run_service_url']?.value as string || ''
   const identityToken = settings['identity_token']?.value as string || ''
 
-  const callMCPTool = async (toolName: string, args: any): Promise<any> => {
-    if (!CLOUD_RUN_URL) {
-      throw new Error('Cloud Run URL not configured')
-    }
-    
-    if (!identityToken) {
-      throw new Error('Identity token not available')
-    }
-
-    const requestBody = {
-      tool_name: toolName,
-      arguments: args
-    }
-
-    const response = await fetch(CLOUD_RUN_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${identityToken}`,
-      },
-      body: JSON.stringify(requestBody)
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const result = await response.json()
-    
-    if (result.error) {
-      throw new Error(result.error)
-    }
-
-    return result
-  }
+  // Note: MCP tool calls have been removed from frontend.
+  // This functionality should be replaced with direct REST API calls.
 
   // Enhanced explicit feedback methods
   const submitPositiveFeedback = async (data: ExplicitFeedbackData): Promise<boolean> => {
@@ -175,19 +142,11 @@ export const useFeedback = () => {
     }
   }
 
-  const requestResponseImprovement = async (data: ImprovementRequestData): Promise<boolean> => {
+  const requestResponseImprovement = async (_data: ImprovementRequestData): Promise<boolean> => {
     setIsSubmitting(true)
     
     try {
-      await callMCPTool('request_response_improvement', {
-        query_id: data.queryId,
-        original_input: data.originalInput,
-        original_response: data.originalResponse,
-        improvement_request: data.improvementRequest,
-        context: data.context
-      })
-
-      return true
+      throw new Error('MCP functionality has been removed. Please use REST API endpoints instead.')
     } catch (error) {
       console.error('Failed to request improvement:', error)
       return false
@@ -207,9 +166,14 @@ export const useFeedback = () => {
       }
       // Replace shareUrl hostname with extension context host
       const updatedShareUrl = updateUrlHostname(feedbackData.shareUrl)
-      const requestBody = {
-        tool_name: 'add_feedback_query',
-        arguments: {
+      // Use REST API endpoint instead of MCP tool
+      const response = await fetch(`${CLOUD_RUN_URL}/api/v1/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${identityToken}`,
+        },
+        body: JSON.stringify({
           explore_id: feedbackData.exploreId,
           original_prompt: feedbackData.originalPrompt,
           generated_params: feedbackData.generatedParams,
@@ -223,15 +187,7 @@ export const useFeedback = () => {
             : JSON.stringify(feedbackData.suggestedImprovements),
           issues: feedbackData.issues || (feedbackData.feedbackType === 'negative' ? ['User marked as unhelpful'] : null),
           query_id: feedbackData.queryId
-        }
-      }
-      const response = await fetch(CLOUD_RUN_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${identityToken}`,
-        },
-        body: JSON.stringify(requestBody)
+        })
       })
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
@@ -261,23 +217,19 @@ export const useFeedback = () => {
         throw new Error('Identity token not available')
       }
 
-      const requestBody = {
-        tool_name: 'get_query_feedback_history',
-        arguments: {
-          explore_id: filters.exploreId,
-          user_id: filters.userId,
-          feedback_type: filters.feedbackType,
-          limit: filters.limit || 20
-        }
-      }
+      // Use REST API endpoint instead of MCP tool
+      const queryParams = new URLSearchParams()
+      if (filters.exploreId) queryParams.append('explore_id', filters.exploreId)
+      if (filters.userId) queryParams.append('user_id', filters.userId)
+      if (filters.feedbackType) queryParams.append('feedback_type', filters.feedbackType)
+      queryParams.append('limit', String(filters.limit || 20))
 
-      const response = await fetch(CLOUD_RUN_URL, {
-        method: 'POST',
+      const response = await fetch(`${CLOUD_RUN_URL}/api/v1/feedback/history?${queryParams}`, {
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${identityToken}`,
-        },
-        body: JSON.stringify(requestBody)
+        }
       })
 
       if (!response.ok) {
@@ -309,18 +261,13 @@ export const useFeedback = () => {
         throw new Error('Identity token not available')
       }
 
-      const requestBody = {
-        tool_name: 'get_query_stats',
-        arguments: {}
-      }
-
-      const response = await fetch(CLOUD_RUN_URL, {
-        method: 'POST',
+      // Use REST API endpoint instead of MCP tool
+      const response = await fetch(`${CLOUD_RUN_URL}/api/v1/feedback/stats`, {
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${identityToken}`,
-        },
-        body: JSON.stringify(requestBody)
+        }
       })
 
       if (!response.ok) {

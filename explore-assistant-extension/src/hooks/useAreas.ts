@@ -15,47 +15,47 @@ export const useAreas = () => {
   const { showBoundary } = useErrorBoundary()
   const { isAreasLoaded, settings } = useSelector((state: RootState) => state.assistant as AssistantState)
   
-  const { core40SDK, lookerHostData } = useContext(ExtensionContext)
-  const defaultModelName = lookerHostData?.extensionId.split('::')[0]
-  
-  // Use the setting if available, otherwise fallback to the default model name from extensionId
-  const modelName = settings?.bigquery_example_looker_model_name?.value 
-    ? String(settings.bigquery_example_looker_model_name.value)
-    : defaultModelName
+  const { lookerHostData } = useContext(ExtensionContext)
 
   const runAreasQuery = async () => {
     try {
-      const query = await core40SDK.ok(
-        core40SDK.run_inline_query({
-          result_format: 'json',
-          body: {
-            model: modelName || "explore_assistant",
-            view: "areas", // This will be the new view/explore for areas
-            fields: [`areas.area`, `areas.explore_key`, `areas.description`],
-          }
-        })
-      )
-
-      if (query === undefined) {
+      // Get Cloud Run settings
+      const CLOUD_RUN_URL = settings?.cloud_run_service_url?.value as string || ''
+      const identityToken = settings?.identity_token?.value as string || ''
+      
+      if (!CLOUD_RUN_URL) {
+        console.error('Cloud Run URL not configured')
         return []
       }
-      return query
+      
+      if (!identityToken) {
+        console.error('Identity token not available')
+        return []
+      }
+
+      const response = await fetch(`${CLOUD_RUN_URL}/api/v1/areas`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${identityToken}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+      
+      if (!result.success || !result.data) {
+        console.error('Areas API returned unsuccessful response:', result)
+        return []
+      }
+      
+      return result.data
     } catch (error: any) {
-      if (error.name === 'LookerSDKError' || error.message === 'Model Not Found') {
-        console.error('Error running areas query:', error.message)
-        return []
-      }
-
-      // Detect OAuth-related errors and surface a user-friendly message
-      if (error.message && error.message.includes('OAuth')) {
-        console.error('OAuth error detected in areas query:', error.message)
-        dispatch(setIsAreasLoaded(false))
-        return []
-      }
-
-      console.error('Unexpected error in areas query:', error)
-      showBoundary(error)
-      throw new Error('error')
+      console.error('Error fetching areas from backend:', error.message)
+      return []
     }
   }
 
@@ -74,9 +74,9 @@ export const useAreas = () => {
       
       response.forEach((row: any) => {
         try {
-          const area = row['areas.area']
-          const exploreKey = row['areas.explore_key']
-          const description = row['areas.description'] || ''
+          const area = row.area
+          const exploreKey = row.explore_key
+          const description = row.description || ''
           
           if (!area || !exploreKey) {
             console.error('Missing area or explore_key in response row', row)
@@ -128,7 +128,6 @@ export const useAreas = () => {
   // Create refs to track state between renders
   const hasFetched = useRef(false)
   const isFetching = useRef(false)
-  const lastModelName = useRef<string | null>(null)
 
   // Fetch areas on component mount
   useEffect(() => {
@@ -142,21 +141,10 @@ export const useAreas = () => {
     }
     isFetching.current = true
     console.log('Areas fetch effect triggered', {
-      modelName,
       isAreasLoaded,
       hasFetched: hasFetched.current,
       isFetching: isFetching.current
     })
-
-    // Check if model name changed since last fetch
-    const modelNameChanged = lastModelName.current !== null && 
-                             lastModelName.current !== modelName;
-    if (modelNameChanged) {
-      console.log(`Model name changed from ${lastModelName.current} to ${modelName}, forcing areas re-fetch`);
-      hasFetched.current = false;
-      dispatch(setIsAreasLoaded(false));
-    }
-    lastModelName.current = modelName || null;
     let activeRequest = true
 
     // Add timeout in case fetch hangs
@@ -193,7 +181,7 @@ export const useAreas = () => {
       clearTimeout(timeoutId)
       isFetching.current = false
     }
-  }, [settings?.bigquery_example_looker_model_name?.value, modelName, dispatch])
+  }, [settings?.cloud_run_service_url?.value, settings?.identity_token?.value, dispatch])
 
   return {
     getAreas,

@@ -22,7 +22,7 @@ def start_server():
         'LOOKER_BASE_URL': 'dummy',
         'LOOKER_CLIENT_ID': 'dummy', 
         'LOOKER_CLIENT_SECRET': 'dummy',
-        'GOOGLE_CLOUD_PROJECT': 'ml-accelerator-dbarr'
+        'GOOGLE_CLOUD_PROJECT': 'your-gcp-project-id'
     })
     
     # Start server

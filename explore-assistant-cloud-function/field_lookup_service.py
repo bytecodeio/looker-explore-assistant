@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Environment configuration
-BQ_PROJECT_ID = os.environ.get("BQ_PROJECT_ID", "ml-accelerator-dbarr")
+BQ_PROJECT_ID = os.environ.get("BQ_PROJECT_ID", "your-bigquery-project-id")
 DATASET_ID = os.environ.get("BQ_DATASET_ID", "explore_assistant")
 FIELD_VALUES_TABLE = "field_values_for_vectorization"
 EMBEDDING_MODEL = "text_embedding_model"

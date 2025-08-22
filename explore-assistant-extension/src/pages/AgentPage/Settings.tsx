@@ -174,17 +174,48 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
   // No longer automatically running tests when modal opens
   // Only run tests when the user clicks Test & Save
 
-  // Check admin status
+  // Check admin/developer status
   useEffect(() => {
     const checkAdminStatus = async () => {
       try {
+        let hasSettingsAccess = false
+        
+        // Method 1: Get user info and try to fetch roles
         const me = await core40SDK.ok(core40SDK.me())
-        const isLookerAdmin = (me as any).roles?.some((role: any) => 
-          role.name === 'Admin' || role.permission_set?.permissions?.includes('admin')
-        ) || false
-        setIsAdmin(isLookerAdmin)
+        
+        // Method 2: Try to get user roles separately
+        try {
+          const userRoles = await core40SDK.ok(core40SDK.user_roles(me.id))
+          
+          if (userRoles && Array.isArray(userRoles)) {
+            hasSettingsAccess = userRoles.some((role: any) => {
+              const roleName = role.name?.toLowerCase() || ''
+              return roleName === 'admin' || roleName === 'developer'
+            })
+          }
+        } catch (rolesError) {
+          // Roles endpoint failed, continue to permission-based check
+        }
+        
+        // Method 3: Check if user can access admin endpoints (permission-based check)
+        if (!hasSettingsAccess) {
+          try {
+            await core40SDK.all_users({ limit: 1 })
+            hasSettingsAccess = true
+          } catch (adminError: any) {
+            const errorMessage = adminError?.message?.toLowerCase() || ''
+            if (errorMessage.includes('permission') || errorMessage.includes('forbidden') || errorMessage.includes('unauthorized')) {
+              hasSettingsAccess = false
+            } else {
+              hasSettingsAccess = false
+            }
+          }
+        }
+        
+        setIsAdmin(hasSettingsAccess)
+        
       } catch (error) {
-        console.error('Error checking admin status:', error)
+        console.error('Error checking admin/developer status:', error)
         setIsAdmin(false)
       }
     }
@@ -233,9 +264,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     fetchExplores();
   }, [open, core40SDK, settings.examples]);
 
-  // TEMPORARY ADMIN OVERRIDE - TODO: Remove in next commit
-  // Allow all users to edit settings temporarily
-  if (!true) return null; // Changed from: if (!isAdmin) return null;
+  // Restrict Settings access to Admin and Developer users only
+  if (!isAdmin) {
+    return null;
+  }
 
   // Handle toggle for boolean settings
   const handleToggle = (id: string) => {

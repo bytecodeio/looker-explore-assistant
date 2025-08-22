@@ -7,7 +7,7 @@
 set -e  # Exit on any error
 
 # Configuration variables - update as needed
-PROJECT_ID="combined-genai-bi"  # Replace with your GCP project ID
+PROJECT_ID="your-gcp-project-id"  # Replace with your GCP project ID
 REGION="us-central1"            # Replace with your preferred region
 SERVICE_NAME="mcp-server"       # Unique service name for the true MCP server
 IMAGE_NAME="mcp-server"

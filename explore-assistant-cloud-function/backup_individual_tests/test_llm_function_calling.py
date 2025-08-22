@@ -64,7 +64,7 @@ def test_llm_function_calling_direct():
         "INSTRUCTION: Before generating any response, you must call lookup_field_values('Nike'). This is mandatory."
     ]
     
-    project = os.environ.get("PROJECT", "ml-accelerator-dbarr")
+    project = os.environ.get("PROJECT", "your-gcp-project-id")
     location = "us-central1"
     model = "gemini-2.0-flash-001"
     

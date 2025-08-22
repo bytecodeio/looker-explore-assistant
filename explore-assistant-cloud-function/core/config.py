@@ -14,14 +14,14 @@ REGION = os.environ.get("REGION", "us-central1")
 VERTEX_MODEL = os.environ.get("VERTEX_MODEL", "gemini-2.0-flash-001")
 
 # BigQuery Configuration
-BQ_PROJECT_ID = os.environ.get("BQ_PROJECT_ID", "explore-assistant-cf-mis")
+BQ_PROJECT_ID = os.environ.get("BQ_PROJECT_ID", "your-bigquery-project-id")
 BQ_DATASET_ID = os.environ.get("BQ_DATASET_ID", "explore_assistant")
 BQ_SUGGESTED_TABLE = os.environ.get("BQ_SUGGESTED_TABLE", "silver_queries")
 FIELD_VALUES_TABLE = "field_values_for_vectorization"
 EMBEDDING_MODEL = "text_embedding_model"
 
 # Looker Configuration
-LOOKER_BASE_URL = os.environ.get("LOOKERSDK_BASE_URL", "https://bytecodeef.looker.com")
+LOOKER_BASE_URL = os.environ.get("LOOKERSDK_BASE_URL", "https://your-looker-instance.cloud.looker.com")
 LOOKER_CLIENT_ID = os.environ.get("LOOKERSDK_CLIENT_ID", "")
 LOOKER_CLIENT_SECRET = os.environ.get("LOOKERSDK_CLIENT_SECRET", "")
 

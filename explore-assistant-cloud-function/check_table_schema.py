@@ -4,7 +4,7 @@
 import os
 from google.cloud import bigquery
 
-BQ_PROJECT_ID = os.environ.get("BQ_PROJECT_ID", "ml-accelerator-dbarr")
+BQ_PROJECT_ID = os.environ.get("BQ_PROJECT_ID", "your-bigquery-project-id")
 DATASET_ID = os.environ.get("BQ_DATASET_ID", "explore_assistant")
 TABLE_NAME = "field_values_for_vectorization"
 

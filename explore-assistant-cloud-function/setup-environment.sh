@@ -65,7 +65,7 @@ for var in "${MISSING_VARS[@]}"; do
             echo "🌍 Google Cloud Project ID:"
             echo "   This is your GCP project where the service will be deployed"
             echo "   export PROJECT_ID=\"your-gcp-project-id\""
-            echo "   Example: export PROJECT_ID=\"combined-genai-bi\""
+            echo "   Example: export PROJECT_ID=\"your-gcp-project-id\""
             ;;
         "REGION")
             echo "📍 Google Cloud Region:"

@@ -6,7 +6,7 @@
 set -e
 
 # Configuration
-PROJECT_ID=${PROJECT_ID:-"combined-genai-bi"}
+PROJECT_ID=${PROJECT_ID:-"your-gcp-project-id"}
 REGION=${REGION:-"us-central1"}
 NEW_SERVICE_NAME="looker-explore-assistant-mcp"
 OLD_SERVICE_NAME="explore-assistant-service"

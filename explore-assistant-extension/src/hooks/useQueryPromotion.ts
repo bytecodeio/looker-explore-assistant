@@ -30,7 +30,11 @@ export const useQueryPromotion = () => {
   const CLOUD_RUN_URL = settings['cloud_run_service_url']?.value as string || ''
   const identityToken = settings['identity_token']?.value as string || ''
 
-  const callMCPTool = useCallback(async (toolName: string, args: any): Promise<any> => {
+  const getQueriesForPromotion = useCallback(async (
+    tableName: 'bronze' | 'silver',
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<QueriesResult> => {
     if (!CLOUD_RUN_URL) {
       throw new Error('Cloud Run URL not configured')
     }
@@ -39,85 +43,44 @@ export const useQueryPromotion = () => {
       throw new Error('Identity token not available')
     }
 
-    const requestBody = {
-      tool_name: toolName,
-      arguments: args
-    }
-
-    console.log('Making MCP tool request:', { toolName, args })
-
-    try {
-      // Try fetchProxy first (preferred)
-      try {
-        console.log('Attempting fetchProxy request...')
-        const response = await extensionSDK.fetchProxy(CLOUD_RUN_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${identityToken}`,
-          },
-          body: JSON.stringify(requestBody)
-        })
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          throw new Error(`HTTP ${response.status}: ${errorText}`)
-        }
-
-        return await response.json()
-      } catch (proxyError) {
-        console.warn('fetchProxy failed, falling back to direct fetch...', proxyError)
-        
-        // Fallback to direct fetch
-        const response = await fetch(CLOUD_RUN_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${identityToken}`,
-          },
-          body: JSON.stringify(requestBody)
-        })
-
-        if (!response.ok) {
-          const errorText = await response.text()
-          throw new Error(`HTTP ${response.status}: ${errorText}`)
-        }
-
-        return await response.json()
-      }
-    } catch (error) {
-      console.error('MCP tool call failed:', error)
-      throw error
-    }
-  }, [CLOUD_RUN_URL, identityToken, extensionSDK])
-
-  const getQueriesForPromotion = useCallback(async (
-    tableName: 'bronze' | 'silver',
-    limit: number = 50,
-    offset: number = 0
-  ): Promise<QueriesResult> => {
     try {
       console.log(`Getting queries for promotion from ${tableName} table...`)
       
-      const result = await callMCPTool('get_queries_by_rank', {
-        rank: tableName,
-        limit: limit,
-        offset: offset
+      // Use REST API endpoint: GET /api/v1/admin/queries/<table_name>
+      const response = await extensionSDK.fetchProxy(`${CLOUD_RUN_URL}/api/v1/admin/queries/${tableName}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${identityToken}`,
+        }
       })
+
+      if (!response.ok) {
+        const errorText = response.body?.error || `HTTP ${response.status}`
+        throw new Error(errorText)
+      }
+
+      const result = response.body
       
-      if (result.error) {
-        throw new Error(result.error)
+      if (!result.success) {
+        throw new Error(result.error?.message || 'Failed to get queries')
       }
       
+      // Apply pagination manually since the API doesn't support it yet
+      const allQueries = result.data || []
+      const startIndex = offset
+      const endIndex = startIndex + limit
+      const paginatedQueries = allQueries.slice(startIndex, endIndex)
+      
       return {
-        queries: result.queries || [],
-        total: result.total || 0
+        queries: paginatedQueries,
+        total: allQueries.length
       }
     } catch (error) {
       console.error(`Error fetching ${tableName} queries:`, error)
       throw error
     }
-  }, [callMCPTool])
+  }, [CLOUD_RUN_URL, identityToken, extensionSDK])
 
   const promoteQuery = useCallback(async (
     queryId: string,
@@ -125,58 +88,122 @@ export const useQueryPromotion = () => {
     targetTable: string = 'golden',
     reason: string = ''
   ): Promise<PromotionResult> => {
+    if (!CLOUD_RUN_URL) {
+      throw new Error('Cloud Run URL not configured')
+    }
+    
+    if (!identityToken) {
+      throw new Error('Identity token not available')
+    }
+
     try {
-      console.log('Promoting query with MCP tool:', { queryId, sourceTable, targetTable, reason })
+      console.log('Promoting query with REST API:', { queryId, sourceTable, targetTable, reason })
       
-      const result = await callMCPTool('promote_to_gold', {
-        query_id: queryId,
-        promoted_by: 'user' // You might want to get actual user info
+      // Use REST API endpoint: POST /api/v1/admin/promote
+      const response = await extensionSDK.fetchProxy(`${CLOUD_RUN_URL}/api/v1/admin/promote`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${identityToken}`,
+        },
+        body: JSON.stringify({
+          query_id: queryId,
+          target_rank: targetTable === 'golden' ? 'GOLD' : targetTable.toUpperCase(),
+          promoted_by: 'user', // You might want to get actual user info
+          promotion_reason: reason || undefined
+        })
       })
 
-      if (result.error) {
-        throw new Error(result.error)
+      if (!response.ok) {
+        const errorText = response.body?.error || `HTTP ${response.status}`
+        throw new Error(errorText)
+      }
+
+      const result = response.body
+
+      if (!result.success) {
+        throw new Error(result.error?.message || 'Failed to promote query')
       }
 
       console.log('Query promoted successfully:', result)
       
       return {
-        new_query_id: result.new_query_id || result.query_id,
+        new_query_id: result.data?.new_query_id || result.data?.query_id || queryId,
         source_query_id: queryId,
         source_table: sourceTable,
-        target_table: 'gold', // Olympic system uses 'gold' instead of 'golden'
-        promoted_by: result.promoted_by || 'user'
+        target_table: targetTable === 'golden' ? 'gold' : targetTable, // Olympic system uses 'gold' instead of 'golden'
+        promoted_by: result.data?.promoted_by || 'user'
       }
     } catch (error) {
       console.error('Error promoting query:', error)
       throw error
     }
-  }, [callMCPTool])
+  }, [CLOUD_RUN_URL, identityToken, extensionSDK])
 
   const getPromotionHistory = useCallback(async (
     limit: number = 50,
     offset: number = 0
   ): Promise<HistoryResult> => {
+    if (!CLOUD_RUN_URL) {
+      throw new Error('Cloud Run URL not configured')
+    }
+    
+    if (!identityToken) {
+      throw new Error('Identity token not available')
+    }
+
     try {
       console.log('Getting promotion history...')
       
-      const result = await callMCPTool('get_promotion_history', {
-        limit: limit,
-        offset: offset
+      // Note: There's no specific promotion history endpoint in the backend yet,
+      // so we'll use the stats endpoint which provides overview data
+      // Use REST API endpoint: GET /api/v1/admin/stats
+      const response = await extensionSDK.fetchProxy(`${CLOUD_RUN_URL}/api/v1/admin/stats`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${identityToken}`,
+        }
       })
+
+      if (!response.ok) {
+        const errorText = response.body?.error || `HTTP ${response.status}`
+        throw new Error(errorText)
+      }
+
+      const result = response.body
       
-      if (result.error) {
-        throw new Error(result.error)
+      if (!result.success) {
+        throw new Error(result.error?.message || 'Failed to get promotion history')
       }
       
+      // Transform stats data into history format
+      // This is a placeholder implementation since the backend doesn't have detailed history yet
+      const statsData = result.data || {}
+      const mockHistory = [
+        {
+          id: 'stats-summary',
+          action: 'query_stats',
+          timestamp: new Date().toISOString(),
+          details: statsData,
+          promoted_by: 'system'
+        }
+      ]
+      
+      // Apply pagination
+      const startIndex = offset
+      const endIndex = startIndex + limit
+      const paginatedHistory = mockHistory.slice(startIndex, endIndex)
+      
       return {
-        history: result.history || [],
-        total: result.total || 0
+        history: paginatedHistory,
+        total: mockHistory.length
       }
     } catch (error) {
       console.error('Error fetching promotion history:', error)
       throw error
     }
-  }, [callMCPTool])
+  }, [CLOUD_RUN_URL, identityToken, extensionSDK])
 
   return {
     getQueriesForPromotion,

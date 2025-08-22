@@ -7,6 +7,7 @@ Provides safe migration with data preservation and rollback capabilities.
 
 import uuid
 import os
+import json
 import urllib.parse
 from datetime import datetime
 from typing import Dict, List, Any, Optional
@@ -32,9 +33,9 @@ class OlympicMigrationManager:
         self.legacy_tables = ['bronze_queries', 'silver_queries', 'golden_queries']
         self.tables_to_archive = ['bronze_queries', 'silver_queries']  # golden_queries should be preserved
         self.olympic_table = 'olympic_queries'
-        self.looker_base_url = os.environ.get("LOOKERSDK_BASE_URL", "https://bytecodeef.looker.com")
+        self.looker_base_url = os.environ.get("LOOKERSDK_BASE_URL", "https://your-looker-instance.cloud.looker.com")
         
-    def _generate_looker_link(self, model_name: str, explore_name: str, explore_params: str = None, 
+    def _generate_looker_link(self, model_name: str, explore_name: str, explore_params=None, 
                              query_url_params: str = None) -> str:
         """
         Generate a Looker explore link from model, explore, and parameters.
@@ -42,7 +43,7 @@ class OlympicMigrationManager:
         Args:
             model_name: Looker model name
             explore_name: Looker explore name  
-            explore_params: JSON string or query parameters for the explore
+            explore_params: JSON string, dict, or query parameters for the explore
             query_url_params: Additional URL parameters
             
         Returns:
@@ -55,17 +56,25 @@ class OlympicMigrationManager:
         base_url = self.looker_base_url.rstrip('/')
         link = f"{base_url}/explore/{model_name}/{explore_name}"
         
-        # Combine parameters
+        # Convert explore_params to URL parameters
         params = ""
         if explore_params:
-            # Handle both JSON and URL parameter formats
-            if explore_params.strip().startswith('{'):
-                # JSON format - for now, we'll skip complex JSON parsing
-                # Could be enhanced later to parse JSON and convert to URL params
-                pass
-            else:
-                # Assume it's already URL parameters
-                params = explore_params.strip('?&')
+            if isinstance(explore_params, str):
+                # Handle JSON string format
+                if explore_params.strip().startswith('{'):
+                    try:
+                        explore_dict = json.loads(explore_params)
+                        params = self._convert_explore_params_to_url(explore_dict)
+                    except (json.JSONDecodeError, Exception) as e:
+                        logger.warning(f"Failed to parse explore_params JSON: {e}")
+                        # Fallback to treating as URL parameters
+                        params = explore_params.strip('?&')
+                else:
+                    # Assume it's already URL parameters
+                    params = explore_params.strip('?&')
+            elif isinstance(explore_params, dict):
+                # Handle dict format directly
+                params = self._convert_explore_params_to_url(explore_params)
                 
         if query_url_params:
             additional_params = query_url_params.strip('?&')
@@ -78,6 +87,66 @@ class OlympicMigrationManager:
             link += "?" + params
             
         return link
+    
+    def _convert_explore_params_to_url(self, explore_params: dict) -> str:
+        """
+        Convert explore parameters dictionary to URL query string.
+        
+        Args:
+            explore_params: Dictionary of explore parameters
+            
+        Returns:
+            str: URL encoded query string
+        """
+        from urllib.parse import urlencode
+        
+        url_params = []
+        
+        # Handle fields
+        if 'fields' in explore_params and explore_params['fields']:
+            if isinstance(explore_params['fields'], list):
+                url_params.append(('fields', ','.join(explore_params['fields'])))
+            else:
+                url_params.append(('fields', str(explore_params['fields'])))
+        
+        # Handle filters
+        if 'filters' in explore_params and explore_params['filters']:
+            filters = explore_params['filters']
+            if isinstance(filters, dict):
+                for filter_name, filter_value in filters.items():
+                    if filter_value:  # Only add non-empty filters
+                        url_params.append((f'f[{filter_name}]', str(filter_value)))
+            
+        # Handle sorts
+        if 'sorts' in explore_params and explore_params['sorts']:
+            if isinstance(explore_params['sorts'], list):
+                url_params.append(('sorts', ','.join(explore_params['sorts'])))
+            else:
+                url_params.append(('sorts', str(explore_params['sorts'])))
+        
+        # Handle pivots
+        if 'pivots' in explore_params and explore_params['pivots']:
+            if isinstance(explore_params['pivots'], list):
+                url_params.append(('pivots', ','.join(explore_params['pivots'])))
+            else:
+                url_params.append(('pivots', str(explore_params['pivots'])))
+        
+        # Handle limit
+        if 'limit' in explore_params and explore_params['limit']:
+            url_params.append(('limit', str(explore_params['limit'])))
+        
+        # Handle vis_config
+        if 'vis_config' in explore_params and explore_params['vis_config']:
+            try:
+                vis_config_str = json.dumps(explore_params['vis_config']) if isinstance(explore_params['vis_config'], dict) else str(explore_params['vis_config'])
+                url_params.append(('vis', vis_config_str))
+            except Exception:
+                pass
+        
+        # Add toggle for data and visualization
+        url_params.append(('toggle', 'vis,data'))
+        
+        return urlencode(url_params)
         
     def _generate_link_sql(self, source_fields: set) -> str:
         """

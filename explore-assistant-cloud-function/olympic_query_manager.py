@@ -210,7 +210,7 @@ class OlympicQueryManager:
         return query_id
 
     def add_feedback_query(self, explore_id: str, original_prompt: str, generated_params: dict,
-                          share_url: str, feedback_type: str, user_id: str, 
+                          share_url: str, feedback_type: str, user_email: str, 
                           conversation_context: str = None, user_comment: str = None, 
                           suggested_improvements: str = None, issues: list = None, 
                           query_id: str = None) -> str:
@@ -224,7 +224,7 @@ class OlympicQueryManager:
             generated_params: The AI-generated query parameters
             share_url: Link to the query
             feedback_type: 'positive', 'negative', 'refinement', 'alternative'
-            user_id: User who provided feedback
+            user_email: Email of user who provided feedback
             conversation_context: Previous conversation history context
             user_comment: User's additional comments
             suggested_improvements: Specific improvement suggestions
@@ -267,7 +267,7 @@ class OlympicQueryManager:
             link=share_url,
             rank=rank,
             created_at=datetime.utcnow(),
-            user_id=user_id,
+            user_email=user_email,
             feedback_type=feedback_type,
             conversation_history=json.dumps(combined_history)
         )

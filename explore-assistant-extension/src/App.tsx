@@ -46,39 +46,50 @@ const ExploreApp = () => {
     return () => clearTimeout(oauthTimeout)
   }, [isAuthenticating])
 
-  // Show error state if OAuth fails or times out
+  // Show error state if OAuth fails or times out - default to popup guidance since most OAuth errors are popup-related
   if (oauthError || showFallbackUI) {
     return (
-      <>
-        <SettingsModal
-          open={isSettingsOpen}
-          onClose={() => {
-            AUTH_DEBUG && console.log('Settings modal closed')
-            setIsSettingsOpen(false)
-            setShowFallbackUI(false)
-          }}
-        />
-        <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" height="100vh" p={3}>
-          <Typography variant="h6" color="error" gutterBottom>
-            {oauthError || 'Authentication Error'}
+      <Box display="flex" flexDirection="column" justifyContent="center" alignItems="center" height="100vh" p={3} maxWidth="600px" mx="auto">
+        <Typography variant="h6" color="error" gutterBottom>
+          Pop-up Blocked
+        </Typography>
+        <Typography variant="body1" gutterBottom align="center" sx={{ mb: 2 }}>
+          Your browser blocked the authorization pop-up window. To use this extension, you need to allow pop-ups for this site.
+        </Typography>
+        
+        <Box sx={{ textAlign: 'left', mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 'bold' }}>
+            How to allow pop-ups:
           </Typography>
-          <Typography variant="body1" gutterBottom align="center">
-            There seems to be an issue with authentication. Please check your settings and try again.
+          <Typography variant="body2" component="div">
+            <strong>Chrome:</strong>
+            <br />• Click the pop-up blocked icon in the address bar
+            <br />• Select "Always allow pop-ups from this site"
+            <br /><br />
+            <strong>Firefox:</strong>
+            <br />• Click the shield icon in the address bar  
+            <br />• Select "Allow pop-ups for this site"
+            <br /><br />
+            <strong>Safari:</strong>
+            <br />• Go to Safari → Preferences → Websites → Pop-up Windows
+            <br />• Find this site and set to "Allow"
+            <br /><br />
+            <strong>Edge:</strong>
+            <br />• Click the pop-up blocked notification in the address bar
+            <br />• Select "Always allow"
           </Typography>
-          <Box mt={2}>
-            <Button 
-              variant="contained" 
-              color="primary"
-              onClick={() => {
-                setIsSettingsOpen(true)
-                setShowFallbackUI(false)
-              }}
-            >
-              Open Settings
-            </Button>
-          </Box>
         </Box>
-      </>
+        
+        <Box mt={2}>
+          <Button 
+            variant="contained" 
+            color="primary"
+            onClick={() => window.location.reload()}
+          >
+            Reload Page
+          </Button>
+        </Box>
+      </Box>
     )
   }
 

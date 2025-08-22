@@ -161,7 +161,7 @@ Your response should be a JSON object with the following structure:
 
 if __name__ == "__main__":
     # Set up environment
-    os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "ml-accelerator-dbarr")
+    os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "your-gcp-project-id")
     
     # Run the test
     asyncio.run(test_function_calling_direct())

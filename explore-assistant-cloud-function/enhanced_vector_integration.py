@@ -302,5 +302,5 @@ async def demo_integration():
 
 if __name__ == "__main__":
     import os
-    os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "ml-accelerator-dbarr")
+    os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "your-gcp-project-id")
     asyncio.run(demo_integration())

@@ -54,16 +54,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Environment configuration
-PROJECT_ID = os.environ.get("PROJECT", "combined-genai-bi")
+PROJECT_ID = os.environ.get("PROJECT", "your-gcp-project-id")
 REGION = os.environ.get("REGION", "us-central1")
 VERTEX_MODEL = os.environ.get("VERTEX_MODEL", "gemini-2.0-flash-001")
 
 # BigQuery configuration
-BQ_PROJECT_ID = os.environ.get("BQ_PROJECT_ID", "ml-accelerator-dbarr")
+BQ_PROJECT_ID = os.environ.get("BQ_PROJECT_ID", "your-bigquery-project-id")
 BQ_DATASET_ID = os.environ.get("BQ_DATASET_ID", "explore_assistant")
 
 # Looker configuration for area-based facts tools (using standard LOOKERSDK_ prefix)
-LOOKER_BASE_URL = os.environ.get("LOOKERSDK_BASE_URL", "https://bytecodeef.looker.com")
+LOOKER_BASE_URL = os.environ.get("LOOKERSDK_BASE_URL", "https://your-looker-instance.cloud.looker.com")
 LOOKER_CLIENT_ID = os.environ.get("LOOKERSDK_CLIENT_ID", "")
 LOOKER_CLIENT_SECRET = os.environ.get("LOOKERSDK_CLIENT_SECRET", "")
 
@@ -1170,7 +1170,7 @@ class LookerExploreAssistantMCPServer:
             
             query = f"""
             SELECT DISTINCT area, explore_key, description
-            FROM `{PROJECT_ID}.explore_assistant.areas`
+            FROM `{BQ_PROJECT_ID}.explore_assistant.areas`
             ORDER BY area
             """
             
