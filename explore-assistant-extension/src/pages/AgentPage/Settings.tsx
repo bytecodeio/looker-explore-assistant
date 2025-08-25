@@ -53,6 +53,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
   const { testCloudRunSettings } = useSendCloudRunMessage()
   const { generateBronzeQueries } = useGenerateBronzeQueries()
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isCheckingAdmin, setIsCheckingAdmin] = useState(true)
 
   // Use extension context hook
   const { saveExtensionContext } = useExtensionContext()
@@ -213,10 +214,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
         }
         
         setIsAdmin(hasSettingsAccess)
+        setIsCheckingAdmin(false)
         
       } catch (error) {
         console.error('Error checking admin/developer status:', error)
         setIsAdmin(false)
+        setIsCheckingAdmin(false)
       }
     }
     checkAdminStatus()
@@ -264,6 +267,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
     fetchExplores();
   }, [open, core40SDK, settings.examples]);
 
+  // Don't render until admin check is complete
+  if (isCheckingAdmin) {
+    return null;
+  }
+  
   // Restrict Settings access to Admin and Developer users only
   if (!isAdmin) {
     return null;
