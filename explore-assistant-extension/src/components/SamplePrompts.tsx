@@ -17,6 +17,7 @@ const SamplePrompts = () => {
     selectedArea,
     selectedExplores,
     availableAreas,
+    semanticModels,
   } = useSelector((state: RootState) => state.assistant as AssistantState)
 
   // Ensure we have a valid explore context when component mounts
@@ -26,6 +27,24 @@ const SamplePrompts = () => {
     }
   }, [modelName, exploreId, exploreKey, dispatch])
 
+  // Get available explores (those with loaded semantic models)
+  const getAvailableSelectedExplores = () => {
+    if (!selectedExplores) return []
+    return selectedExplores.filter(exploreKey => {
+      // Only include explores that have successfully loaded semantic models and have samples
+      return semanticModels[exploreKey] && exploreSamples[exploreKey]
+    })
+  }
+  
+  // Get unavailable explores for warning display
+  const getUnavailableSelectedExplores = () => {
+    if (!selectedExplores) return []
+    return selectedExplores.filter(exploreKey => {
+      // Include explores that don't have semantic models or samples
+      return !semanticModels[exploreKey] || !exploreSamples[exploreKey]
+    })
+  }
+
   // Check if user has selected an area and one or more explores
   if (!selectedArea || !selectedExplores || selectedExplores.length === 0) {
     return (
@@ -34,12 +53,19 @@ const SamplePrompts = () => {
       </div>
     )
   }
+  
+  const availableExplores = getAvailableSelectedExplores()
+  const unavailableExplores = getUnavailableSelectedExplores()
+  
+  // Show warning if some selected explores are not available
+  const hasUnavailableExplores = unavailableExplores.length > 0
 
-  // Get all sample prompts for the selected explores
+  // Get all sample prompts for the available selected explores
   const getSelectedExploresSamples = () => {
     const allSamples: any[] = []
+    const availableExplores = getAvailableSelectedExplores()
     
-    selectedExplores.forEach(exploreKey => {
+    availableExplores.forEach(exploreKey => {
       const samples = exploreSamples[exploreKey]
       if (samples && Array.isArray(samples)) {
         // Add explore context to each sample for identification
@@ -112,12 +138,26 @@ const SamplePrompts = () => {
   }) || []
 
   if (validSamples.length === 0) {
+    // Log unavailable models to console instead of showing visible warnings
+    if (hasUnavailableExplores) {
+      console.warn('Sample prompts not available for:', unavailableExplores.map(key => key.split(':')[1]).join(', '))
+      console.warn('These data models may still be loading or unavailable.')
+    }
+    
     return (
       <div className="text-2xl text-gray-400">
         <p>No sample prompts available for the selected data models</p>
       </div>
     )
   }
+
+  // Log model availability info to console
+  if (hasUnavailableExplores) {
+    console.warn('Some selected data models are not yet available:', unavailableExplores.map(key => key.split(':')[1]).join(', '))
+    console.log('Showing prompts for available models only.')
+  }
+  
+  console.log(`Sample prompts: ${availableExplores.length} of ${selectedExplores.length} data models available for area: ${selectedArea}`)
 
   return (
     <div className="flex flex-col max-w-5xl">

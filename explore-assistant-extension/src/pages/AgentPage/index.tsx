@@ -91,11 +91,24 @@ const AgentPage = () => {
   //   }
   // })
 
-  // Get explores for the selected area
+  // Get explores for the selected area, filtered by available semantic models
   const getExploresForSelectedArea = () => {
     if (!selectedArea) return []
     const area = availableAreas.find(a => a.area === selectedArea)
-    return area ? area.explore_keys : []
+    if (!area) return []
+    
+    const availableExplores = area.explore_keys.filter(exploreKey => semanticModels[exploreKey])
+    const unavailableExplores = area.explore_keys.filter(exploreKey => !semanticModels[exploreKey])
+    
+    // Log model availability info to console
+    if (unavailableExplores.length > 0) {
+      console.warn(`Area "${selectedArea}" - ${unavailableExplores.length} data models not yet available:`, unavailableExplores.map(key => key.split(':')[1]))
+      console.log(`Area "${selectedArea}" - ${availableExplores.length} data models available:`, availableExplores.map(key => key.split(':')[1]))
+    } else if (availableExplores.length > 0) {
+      console.log(`Area "${selectedArea}" - All ${availableExplores.length} data models are available`)
+    }
+    
+    return availableExplores
   }
 
   // Get explore details for display
@@ -451,10 +464,37 @@ const AgentPage = () => {
     }
   }
 
-  const isAgentReady = isBigQueryMetadataLoaded && isSemanticModelLoaded && isAreasLoaded
+  // Helper functions for partial loading
+  const getLoadedModelsCount = () => Object.keys(semanticModels).length
+  const getTotalModelsCount = () => Object.keys(examples.exploreSamples).length
+  const hasPartialModels = getLoadedModelsCount() > 0
+  const hasPartialData = isBigQueryMetadataLoaded || hasPartialModels || isAreasLoaded
+  
+  // Show UI when we have at least some data instead of requiring everything
+  const isAgentReady = hasPartialData
+  
   if (!isAgentReady) {
+    console.log('AgentPage - Waiting for initial data load...')
     console.log('AgentPage - isBigQueryMetadataLoaded:', isBigQueryMetadataLoaded, ' isSemanticModelLoaded:', isSemanticModelLoaded, ' isAreasLoaded:', isAreasLoaded)
-      }
+    
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="flex flex-col space-y-4 mx-auto max-w-2xl p-4">
+          <h1 className="text-5xl font-bold">
+            <span className="bg-clip-text text-transparent  bg-gradient-to-r from-pink-500 to-violet-500">
+              Hello.
+            </span>
+          </h1>
+          <h1 className="text-3xl text-gray-400">
+            Getting everything ready...
+          </h1>
+          <div className="max-w-2xl text-blue-300">
+            <LinearProgress color="inherit" />
+          </div>
+        </div>
+      </div>
+    )
+  }
     //       return (
     //   <div className="flex justify-center items-center h-screen">
     //     <div className="flex flex-col space-y-4 mx-auto max-w-2xl p-4">
@@ -603,6 +643,7 @@ const AgentPage = () => {
 
               <div className="flex flex-col max-w-3xl m-auto mt-4">
                 
+
                 {/* Area and Explore Selectors */}
                 {availableAreas && availableAreas.length > 0 && (
                   <div className="mb-6 mx-auto space-y-4" style={{ width: '600px' }}>

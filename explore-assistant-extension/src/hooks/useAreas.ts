@@ -1,7 +1,6 @@
 import { useContext, useEffect, useRef } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { ExtensionContext } from '@looker/extension-sdk-react'
-import { useErrorBoundary } from 'react-error-boundary'
 import { RootState } from '../store'
 import {
   setAvailableAreas,
@@ -12,7 +11,6 @@ import {
 
 export const useAreas = () => {
   const dispatch = useDispatch()
-  const { showBoundary } = useErrorBoundary()
   const { isAreasLoaded, settings } = useSelector((state: RootState) => state.assistant as AssistantState)
   
   const { lookerHostData } = useContext(ExtensionContext)
@@ -121,7 +119,8 @@ export const useAreas = () => {
     } catch (error) {
       console.error('Error in getAreas:', error)
       dispatch(setIsAreasLoaded(false))
-      showBoundary(error)
+      // Don't crash the app - mark as loaded with empty areas
+      dispatch(setIsAreasLoaded(true))
     }
   }
 

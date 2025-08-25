@@ -59,8 +59,9 @@ export const useBigQueryExamples = () => {
       }
 
       console.error('Unexpected error in BigQuery query:', error)
-      showBoundary(error)
-      throw new Error('error')
+      // Don't crash the app - return empty array
+      dispatch(setBigQueryTestSuccessful(false))
+      return []
     }
   }
 
@@ -172,7 +173,8 @@ export const useBigQueryExamples = () => {
       console.error('Error in getExamplesAndSamples:', error)
       dispatch(setisBigQueryMetadataLoaded(false))
       dispatch(setBigQueryTestSuccessful(false))
-      showBoundary(error)
+      // Don't crash the app - mark as loaded with no data
+      dispatch(setisBigQueryMetadataLoaded(true))
     }
   }
 

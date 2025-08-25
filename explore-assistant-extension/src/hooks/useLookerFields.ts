@@ -8,7 +8,6 @@ import {
 } from '../slices/assistantSlice'
 import { RootState } from '../store'
 import { ExtensionContext } from '@looker/extension-sdk-react'
-import { useErrorBoundary } from 'react-error-boundary'
 
 export const useLookerFields = () => {
   const {
@@ -19,7 +18,6 @@ export const useLookerFields = () => {
   const supportedExplores = Object.keys(exploreSamples)
 
   const dispatch = useDispatch()
-  const { showBoundary } = useErrorBoundary()
 
   const { core40SDK } = useContext(ExtensionContext)
 
@@ -45,10 +43,8 @@ export const useLookerFields = () => {
       exploreKey: string,
     ): Promise<SemanticModel | undefined> => {
       if (!modelName || !exploreId) {
-        showBoundary({
-          message: 'Default Looker Model or Explore is blank or unspecified',
-        })
-        return
+        console.warn('Default Looker Model or Explore is blank or unspecified', { modelName, exploreId })
+        return undefined
       }
 
       try {
@@ -95,10 +91,16 @@ export const useLookerFields = () => {
           measures,
           description: description || '',
         }
-      } catch (error) {
-        showBoundary({
-          message: `Failed to fetch semantic model for ${modelName}:${exploreId}`,
-        })
+      } catch (error: any) {
+        // Check if it's a 404 or model not found error
+        if (error.message?.includes('404') || error.message?.includes('Not Found') || 
+            error.message?.includes('Model Not Found') || error.message?.includes('Explore Not Found')) {
+          console.warn(`Model/Explore not available: ${modelName}:${exploreId} - ${error.message}`)
+          return undefined // Return undefined instead of crashing
+        }
+        
+        // For other errors, still log but don't crash the app
+        console.error(`Error fetching semantic model for ${modelName}:${exploreId}:`, error)
         return undefined
       }
     }
@@ -113,21 +115,50 @@ export const useLookerFields = () => {
           )
         })
 
-        const results = await Promise.all(fetchPromises)
+        // Use manual promise handling for better compatibility
+        const results = await Promise.all(
+          fetchPromises.map(async (promise) => {
+            try {
+              const result = await promise
+              return { status: 'fulfilled' as const, value: result }
+            } catch (error) {
+              return { status: 'rejected' as const, reason: error }
+            }
+          })
+        )
         const semanticModels: { [explore: string]: SemanticModel } = {}
+        const failedModels: string[] = []
 
-        results.forEach(({ exploreKey, model }) => {
-          if (model) {
+        results.forEach((result: any, index: number) => {
+          if (result.status === 'fulfilled' && result.value.model) {
+            const { exploreKey, model } = result.value
             semanticModels[exploreKey] = model
+          } else {
+            const exploreKey = supportedExplores[index]
+            failedModels.push(exploreKey)
+            if (result.status === 'rejected') {
+              console.warn(`Failed to load model: ${exploreKey}`, result.reason)
+            } else {
+              console.warn(`Model returned no data: ${exploreKey}`)
+            }
           }
         })
-        console.log('Loaded semantic models:', semanticModels)
+        const loadedCount = Object.keys(semanticModels).length
+        const totalCount = supportedExplores.length
+        
+        console.log(`Loaded semantic models: ${loadedCount}/${totalCount}`, semanticModels)
+        if (failedModels.length > 0) {
+          console.warn(`Failed to load ${failedModels.length} models:`, failedModels)
+        }
+        
         dispatch(setSemanticModels(semanticModels))
+        // Mark as loaded even if some models failed - we'll work with what we have
         dispatch(setIsSemanticModelLoaded(true))
       } catch (error) {
-        showBoundary({
-          message: 'Failed to load semantic models',
-        })
+        console.error('Critical error loading semantic models:', error)
+        // Don't crash the app - set loaded to true with empty models
+        dispatch(setSemanticModels({}))
+        dispatch(setIsSemanticModelLoaded(true))
       }
     }
 
