@@ -45,10 +45,10 @@ export const useLookerFields = () => {
       exploreKey: string,
     ): Promise<SemanticModel | undefined> => {
       if (!modelName || !exploreId) {
-        showBoundary({
-          message: 'Default Looker Model or Explore is blank or unspecified',
-        })
-        return
+        console.warn('Model name or explore ID is blank or unspecified:', { modelName, exploreId, exploreKey })
+        // This is not a critical error - it just means the examples haven't loaded yet
+        // Return undefined instead of throwing an error boundary
+        return undefined
       }
 
       try {
@@ -106,12 +106,15 @@ export const useLookerFields = () => {
     const loadSemanticModels = async () => {
       console.log('Loading semantic models...')
       try {
-        const fetchPromises = supportedExplores.map((exploreKey) => {
-          const [modelName, exploreId] = exploreKey.split(':')
-          return fetchSemanticModel(modelName, exploreId, exploreKey).then(
-            (model) => ({ exploreKey, model })
-          )
-        })
+          const fetchPromises = supportedExplores
+               .filter(exploreKey => exploreKey && exploreKey.includes(':'))
+               .map((exploreKey) => {
+                 const [modelName, exploreId] = exploreKey.split(':')
+                 return fetchSemanticModel(modelName, exploreId, exploreKey).then(
+                   (model) => ({ exploreKey, model })
+                 )
+               })
+     
 
         const results = await Promise.all(fetchPromises)
         const semanticModels: { [explore: string]: SemanticModel } = {}
