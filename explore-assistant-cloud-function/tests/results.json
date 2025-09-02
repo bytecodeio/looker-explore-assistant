@@ -1,0 +1,254 @@
+{
+  "suite_id": "comprehensive_integration_tests",
+  "execution_start_time": "2025-08-30T20:20:38.434778",
+  "execution_end_time": "2025-08-30T20:20:53.368896",
+  "total_execution_time_ms": 14934.118,
+  "summary": {
+    "total_tests": 5,
+    "passed_tests": 3,
+    "failed_tests": 2,
+    "test_pass_rate": 60.0,
+    "total_validations": 19,
+    "passed_validations": 18,
+    "failed_validations": 1,
+    "validation_pass_rate": 94.73684210526315,
+    "avg_execution_time_ms": 2986.4931106567383,
+    "debug_sessions_created": 4
+  },
+  "test_results": [
+    {
+      "test_case_id": "product_sku_filter_test",
+      "passed": true,
+      "execution_time_ms": 6313.294410705566,
+      "response_status": 200,
+      "validation_results": [
+        {
+          "description": "Response should indicate success",
+          "passed": true,
+          "actual_value": true,
+          "error_message": ""
+        },
+        {
+          "description": "Explore key should be sales_demo_the_look:order_items",
+          "passed": true,
+          "actual_value": "sales_demo_the_look:order_items",
+          "error_message": ""
+        },
+        {
+          "description": "Filter products.sku should equal 0006AABE0BA47A35C0B0BF6596F85159",
+          "passed": true,
+          "actual_value": "0006AABE0BA47A35C0B0BF6596F85159",
+          "error_message": ""
+        },
+        {
+          "description": "Response should include debug_info when debug=True",
+          "passed": true,
+          "actual_value": {
+            "debug_log_url": "/api/v1/debug/logs/debug_6438070225fa",
+            "llm_interactions_count": 0,
+            "processing_steps_count": 0,
+            "session_id": "debug_6438070225fa",
+            "verbose_details": {
+              "request_size_bytes": 113882,
+              "response_size_bytes": 2745,
+              "total_processing_time_ms": 3044.4788932800293
+            }
+          },
+          "error_message": "Expected non-empty dict, got {'debug_log_url': '/api/v1/debug/logs/debug_6438070225fa', 'llm_interactions_count': 0, 'processing_steps_count': 0, 'session_id': 'debug_6438070225fa', 'verbose_details': {'request_size_bytes': 113882, 'response_size_bytes': 2745, 'total_processing_time_ms': 3044.4788932800293}}"
+        },
+        {
+          "description": "Should have vector search results for SKU lookup",
+          "passed": true,
+          "actual_value": [
+            {
+              "args": {
+                "field_location": "sales_demo_the_look.order_items.inventory_items.inventory_items.product_sku",
+                "value": "0006AABE0BA47A35C0B0BF6596F85159"
+              },
+              "function": "lookup_field_values",
+              "phase": "parameter_generation_preprocessing",
+              "results_summary": "Found value: 0006AABE0BA47A35C0B0BF6596F85159 in sales_demo_the_look.order_items.inventory_items.inventory_items.product_sku"
+            },
+            {
+              "args": {
+                "field_location": "sales_demo_the_look.order_items.products.products.sku",
+                "value": "0006AABE0BA47A35C0B0BF6596F85159"
+              },
+              "function": "lookup_field_values",
+              "phase": "parameter_generation_preprocessing",
+              "results_summary": "Found value: 0006AABE0BA47A35C0B0BF6596F85159 in sales_demo_the_look.order_items.products.products.sku"
+            }
+          ],
+          "error_message": ""
+        }
+      ],
+      "error_message": "",
+      "debug_session_id": "debug_6438070225fa",
+      "debug_log_url": "/api/v1/debug/logs/debug_6438070225fa"
+    },
+    {
+      "test_case_id": "basic_query_test",
+      "passed": true,
+      "execution_time_ms": 2979.71773147583,
+      "response_status": 200,
+      "validation_results": [
+        {
+          "description": "Response should indicate success",
+          "passed": true,
+          "actual_value": true,
+          "error_message": ""
+        },
+        {
+          "description": "Explore key should be sales_demo_the_look:order_items",
+          "passed": true,
+          "actual_value": "sales_demo_the_look:order_items",
+          "error_message": ""
+        },
+        {
+          "description": "Response should include debug_info when debug=True",
+          "passed": true,
+          "actual_value": {
+            "debug_log_url": "/api/v1/debug/logs/debug_f9b156cca0da",
+            "llm_interactions_count": 0,
+            "processing_steps_count": 0,
+            "session_id": "debug_f9b156cca0da",
+            "verbose_details": {
+              "request_size_bytes": 113952,
+              "response_size_bytes": 1271,
+              "total_processing_time_ms": 2513.0839347839355
+            }
+          },
+          "error_message": "Expected non-empty dict, got {'debug_log_url': '/api/v1/debug/logs/debug_f9b156cca0da', 'llm_interactions_count': 0, 'processing_steps_count': 0, 'session_id': 'debug_f9b156cca0da', 'verbose_details': {'request_size_bytes': 113952, 'response_size_bytes': 1271, 'total_processing_time_ms': 2513.0839347839355}}"
+        },
+        {
+          "description": "Should include at least one field",
+          "passed": true,
+          "actual_value": [
+            "order_items.created_date",
+            "order_items.total_sale_price"
+          ],
+          "error_message": ""
+        }
+      ],
+      "error_message": "",
+      "debug_session_id": "debug_f9b156cca0da",
+      "debug_log_url": "/api/v1/debug/logs/debug_f9b156cca0da"
+    },
+    {
+      "test_case_id": "bfoc_sku_monthly_sales",
+      "passed": false,
+      "execution_time_ms": 3339.1242027282715,
+      "response_status": 200,
+      "validation_results": [
+        {
+          "description": "Response should indicate success",
+          "passed": true,
+          "actual_value": true,
+          "error_message": ""
+        },
+        {
+          "description": "Explore key should be sales_demo_the_look:order_items",
+          "passed": true,
+          "actual_value": "sales_demo_the_look:order_items",
+          "error_message": ""
+        },
+        {
+          "description": "Filter products.sku should equal BF0C0D36A5A3F240CCBC590FCA184A7F",
+          "passed": true,
+          "actual_value": "BF0C0D36A5A3F240CCBC590FCA184A7F",
+          "error_message": ""
+        },
+        {
+          "description": "Response should contain all fields: ['order_items.created_month', 'order_items.total_sale_price']",
+          "passed": true,
+          "actual_value": [
+            "order_items.created_month",
+            "order_items.total_sale_price"
+          ],
+          "error_message": ""
+        },
+        {
+          "description": "Response should include debug_info when debug=True",
+          "passed": true,
+          "actual_value": {
+            "debug_log_url": "/api/v1/debug/logs/debug_d3057c017767",
+            "llm_interactions_count": 0,
+            "processing_steps_count": 0,
+            "session_id": "debug_d3057c017767",
+            "verbose_details": {
+              "request_size_bytes": 114009,
+              "response_size_bytes": 1282,
+              "total_processing_time_ms": 2913.37251663208
+            }
+          },
+          "error_message": "Expected non-empty dict, got {'debug_log_url': '/api/v1/debug/logs/debug_d3057c017767', 'llm_interactions_count': 0, 'processing_steps_count': 0, 'session_id': 'debug_d3057c017767', 'verbose_details': {'request_size_bytes': 114009, 'response_size_bytes': 1282, 'total_processing_time_ms': 2913.37251663208}}"
+        },
+        {
+          "description": "Should have vector search results for BF0C SKU lookup",
+          "passed": false,
+          "actual_value": [],
+          "error_message": "Expected length > 0, got 0"
+        }
+      ],
+      "error_message": "",
+      "debug_session_id": "debug_d3057c017767",
+      "debug_log_url": "/api/v1/debug/logs/debug_d3057c017767"
+    },
+    {
+      "test_case_id": "debug_mode_validation",
+      "passed": true,
+      "execution_time_ms": 1891.0531997680664,
+      "response_status": 200,
+      "validation_results": [
+        {
+          "description": "Response should indicate success",
+          "passed": true,
+          "actual_value": true,
+          "error_message": ""
+        },
+        {
+          "description": "Response should include debug_info when debug=True",
+          "passed": true,
+          "actual_value": {
+            "debug_log_url": "/api/v1/debug/logs/debug_56fe7f3cbb1c",
+            "llm_interactions_count": 0,
+            "processing_steps_count": 0,
+            "session_id": "debug_56fe7f3cbb1c",
+            "verbose_details": {
+              "request_size_bytes": 113976,
+              "response_size_bytes": 1141,
+              "total_processing_time_ms": 1485.2356910705566
+            }
+          },
+          "error_message": "Expected non-empty dict, got {'debug_log_url': '/api/v1/debug/logs/debug_56fe7f3cbb1c', 'llm_interactions_count': 0, 'processing_steps_count': 0, 'session_id': 'debug_56fe7f3cbb1c', 'verbose_details': {'request_size_bytes': 113976, 'response_size_bytes': 1141, 'total_processing_time_ms': 1485.2356910705566}}"
+        },
+        {
+          "description": "Should provide debug log URL",
+          "passed": true,
+          "actual_value": "/api/v1/debug/logs/debug_56fe7f3cbb1c",
+          "error_message": ""
+        }
+      ],
+      "error_message": "",
+      "debug_session_id": "debug_56fe7f3cbb1c",
+      "debug_log_url": "/api/v1/debug/logs/debug_56fe7f3cbb1c"
+    },
+    {
+      "test_case_id": "invalid_explore_test",
+      "passed": false,
+      "execution_time_ms": 409.27600860595703,
+      "response_status": 400,
+      "validation_results": [
+        {
+          "description": "Should fail for irrelevant queries",
+          "passed": true,
+          "actual_value": false,
+          "error_message": ""
+        }
+      ],
+      "error_message": "",
+      "debug_session_id": null,
+      "debug_log_url": null
+    }
+  ]
+}

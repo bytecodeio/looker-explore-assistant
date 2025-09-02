@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def determine_explore_from_prompt(auth_header: str, prompt: str, golden_queries: Dict[str, Any], 
-                                conversation_context: str = "", restricted_explore_keys: List[str] = None, semantic_models: Dict[str, Any] = None) -> Optional[str]:
+                                conversation_context: str = "", restricted_explore_keys: List[str] = None, semantic_models: Dict[str, Any] = None, debug_mode: bool = False) -> Optional[str]:
     """
     Enhanced explore determination with conversation context, area restrictions, and optional semantic field discovery.
     Uses Vertex AI function calling to intelligently search for relevant fields when needed.
@@ -236,7 +236,8 @@ Your response:"""
         vertex_response = call_vertex_ai_with_retry(
             vertex_request, 
             context="explore_determination", 
-            process_response=False
+            process_response=False,
+            debug_mode=debug_mode
         )
         
         if not vertex_response:

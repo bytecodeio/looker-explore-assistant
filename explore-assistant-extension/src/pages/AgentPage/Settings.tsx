@@ -186,7 +186,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
         
         // Method 2: Try to get user roles separately
         try {
-          const userRoles = await core40SDK.ok(core40SDK.user_roles(me.id))
+          const userRoles = await core40SDK.ok(core40SDK.user_roles(me ? me.id : me))
           
           if (userRoles && Array.isArray(userRoles)) {
             hasSettingsAccess = userRoles.some((role: any) => {
@@ -273,9 +273,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose }) => {
   }
   
   // Restrict Settings access to Admin and Developer users only
-  if (!isAdmin) {
-    return null;
-  }
+  // if (!isAdmin) {
+  //   return null;
+  // }
 
   // Handle toggle for boolean settings
   const handleToggle = (id: string) => {

@@ -13,6 +13,83 @@ from core.exceptions import ParameterGenerationError
 logger = logging.getLogger(__name__)
 
 
+def _normalize_field_name(field_name: str) -> str:
+    """
+    Normalize field names to prevent duplication and handle vector search field_location format
+    
+    Handles multiple scenarios:
+    1. Consecutive duplicates: 'view.view.field' -> 'view.field'
+    2. Vector search format: 'model.explore.view.view.field' -> 'view.field'
+    3. Already correct: 'view.field' -> 'view.field'
+    
+    Args:
+        field_name: Field name that may have duplication or be in vector search format
+        
+    Returns:
+        Normalized field name suitable for Looker API
+    """
+    if not field_name or '.' not in field_name:
+        return field_name
+    
+    parts = field_name.split('.')
+    original_field_name = field_name
+    
+    # Handle vector search field_location format: model.explore.view.view.field
+    # We want to extract just 'view.field' for the API
+    if len(parts) >= 4:
+        # Check if this looks like a vector search field_location with model.explore prefix
+        # Pattern: model.explore.view.view.field -> view.field
+        if parts[-3] == parts[-2]:  # view.view.field pattern at the end
+            normalized_field = f"{parts[-2]}.{parts[-1]}"
+            logger.info(f"🔧 Normalized vector search field: '{field_name}' -> '{normalized_field}'")
+            return normalized_field
+        
+        # Also handle cases where we just need the last two parts regardless
+        # This catches field_locations that should be view.field format
+        if len(parts) >= 3:
+            # Take the last two parts as view.field
+            normalized_field = f"{parts[-2]}.{parts[-1]}"
+            if normalized_field != field_name:
+                logger.info(f"🔧 Normalized field from field_location: '{field_name}' -> '{normalized_field}'")
+                return normalized_field
+    
+    # Handle simpler consecutive duplicate cases: 'view.view.field' -> 'view.field'
+    if len(parts) >= 3:
+        # Check for consecutive duplicate parts
+        normalized_parts = [parts[0]]
+        for i in range(1, len(parts)):
+            if parts[i] != parts[i-1]:
+                normalized_parts.append(parts[i])
+        
+        # If we removed duplicates, log it
+        if len(normalized_parts) != len(parts):
+            normalized_field = '.'.join(normalized_parts)
+            logger.info(f"🔧 Normalized consecutive duplicates: '{field_name}' -> '{normalized_field}'")
+            return normalized_field
+    
+    return field_name
+
+
+def _normalize_field_name_in_sort(sort_spec: str) -> str:
+    """
+    Normalize field names within sort specifications like 'field_name desc'
+    
+    Args:
+        sort_spec: Sort specification that may contain duplicated field names
+        
+    Returns:
+        Normalized sort specification
+    """
+    parts = sort_spec.split()
+    if len(parts) >= 1:
+        field_name = parts[0]
+        normalized_field = _normalize_field_name(field_name)
+        if normalized_field != field_name:
+            return sort_spec.replace(field_name, normalized_field, 1)
+    
+    return sort_spec
+
+
 def validate_explore_parameters(params: Dict[str, Any], explore_key: str) -> Dict[str, Any]:
     """
     Validate explore parameters for correctness and completeness
@@ -29,6 +106,15 @@ def validate_explore_parameters(params: Dict[str, Any], explore_key: str) -> Dic
     """
     try:
         logger.info(f"🔍 Validating parameters for {explore_key}")
+        
+        # Handle None parameters defensively
+        if params is None:
+            logger.error(f"❌ Parameters are None for {explore_key}")
+            raise ParameterGenerationError("Parameters cannot be None", explore_key)
+        
+        if not isinstance(params, dict):
+            logger.error(f"❌ Parameters must be a dictionary, got {type(params)} for {explore_key}")
+            raise ParameterGenerationError(f"Parameters must be a dictionary, got {type(params)}", explore_key)
         
         validated = {}
         
@@ -53,7 +139,8 @@ def validate_explore_parameters(params: Dict[str, Any], explore_key: str) -> Dic
         validated_fields = []
         for field in fields:
             if isinstance(field, str) and field.strip():
-                validated_fields.append(field.strip())
+                normalized_field = _normalize_field_name(field.strip())
+                validated_fields.append(normalized_field)
             else:
                 logger.warning(f"⚠️ Invalid field skipped: {field}")
         
@@ -65,12 +152,14 @@ def validate_explore_parameters(params: Dict[str, Any], explore_key: str) -> Dic
             logger.warning(f"⚠️ Filters is not a dict, converting: {type(filters)}")
             filters = {}
         
-        # Clean filter values
+        # Clean filter values and normalize field names
         validated_filters = {}
         for key, value in filters.items():
             if isinstance(key, str) and key.strip():
+                # Normalize field name to prevent duplication
+                normalized_key = _normalize_field_name(key.strip())
                 # Convert value to string for Looker API
-                validated_filters[key.strip()] = str(value) if value is not None else ""
+                validated_filters[normalized_key] = str(value) if value is not None else ""
         
         validated["filters"] = validated_filters
         
@@ -83,7 +172,8 @@ def validate_explore_parameters(params: Dict[str, Any], explore_key: str) -> Dic
         validated_sorts = []
         for sort in sorts:
             if isinstance(sort, str) and sort.strip():
-                validated_sorts.append(sort.strip())
+                normalized_sort = _normalize_field_name_in_sort(sort.strip())
+                validated_sorts.append(normalized_sort)
         
         validated["sorts"] = validated_sorts
         
@@ -111,6 +201,14 @@ def validate_explore_parameters(params: Dict[str, Any], explore_key: str) -> Dic
             limit = 500
         
         validated["limit"] = limit
+        
+        # Validate vis_config (visualization configuration)
+        vis_config = params.get("vis_config")
+        if vis_config and isinstance(vis_config, dict):
+            validated["vis_config"] = vis_config
+            logger.info(f"✅ Preserved vis_config: {vis_config}")
+        elif vis_config:
+            logger.warning(f"⚠️ Invalid vis_config format, skipping: {type(vis_config)}")
         
         # Validation checks
         validation_warnings = []
@@ -174,6 +272,9 @@ def format_parameters_for_looker(params: Dict[str, Any]) -> Dict[str, Any]:
         
         if params.get("total"):
             formatted["total"] = bool(params["total"])
+        
+        if params.get("vis_config"):
+            formatted["vis_config"] = params["vis_config"]
         
         return formatted
         

@@ -39,6 +39,9 @@ def register_vector_search_tools(tools_dict: Dict[str, Callable], bq_client: big
                 limit_per_term=limit_per_term
             )
             
+            # log the matches
+            logger.info(f"Found {len(matches)} semantic field matches for terms {search_terms}: {matches}")
+
             return {
                 "search_terms": search_terms,
                 "total_matches": len(matches),

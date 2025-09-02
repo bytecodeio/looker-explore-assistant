@@ -70,7 +70,7 @@ def call_vertex_ai_api_with_service_account(request_body: Dict[str, Any]) -> Opt
         return None
 
 
-def call_vertex_ai_with_retry(request_body: Dict[str, Any], context: str = "", process_response: bool = False) -> Optional[Dict[str, Any]]:
+def call_vertex_ai_with_retry(request_body: Dict[str, Any], context: str = "", process_response: bool = False, debug_mode: bool = False) -> Optional[Dict[str, Any]]:
     """
     Call Vertex AI API with retry logic for token limit errors.
     
@@ -78,19 +78,34 @@ def call_vertex_ai_with_retry(request_body: Dict[str, Any], context: str = "", p
         request_body: The Vertex AI API request
         context: Context string for logging
         process_response: Whether to process response through extract_vertex_response_text()
+        debug_mode: Whether to log detailed debug information
     
     Returns:
         If process_response=True: {'processed_response': text, 'raw_response': dict}
         If process_response=False: raw response dict
     """
+    import time
     max_retries = 2
     vertex_model = request_body.get('model', VERTEX_MODEL)
+    
+    # Initialize debug logging if enabled
+    debug_logger = None
+    interaction_start_time = time.time()
+    
+    if debug_mode:
+        try:
+            from core.debug_logger import debug_logger as dl
+            debug_logger = dl
+        except ImportError:
+            logging.warning("Debug mode requested but debug_logger not available")
     
     for attempt in range(max_retries + 1):
         try:
             logging.info(f"🔄 Vertex AI API attempt {attempt + 1}/{max_retries + 1} for {context}")
             
+            attempt_start_time = time.time()
             response = call_vertex_ai_api_with_service_account(request_body)
+            attempt_duration_ms = (time.time() - attempt_start_time) * 1000
             
             # Check if this was a token limit error from API
             if isinstance(response, dict) and response.get('error') == 'token_limit':
@@ -100,6 +115,18 @@ def call_vertex_ai_with_retry(request_body: Dict[str, Any], context: str = "", p
                     continue
                 else:
                     logging.error(f"❌ All retry attempts exhausted for token limit error")
+                    
+                    # Log debug information for token limit error
+                    if debug_logger:
+                        total_duration_ms = (time.time() - interaction_start_time) * 1000
+                        debug_logger.log_llm_interaction(
+                            context=context,
+                            request_data=_sanitize_request_for_debug(request_body),
+                            response_data=response,
+                            processing_time_ms=total_duration_ms,
+                            error="Token limit exceeded - all retries exhausted"
+                        )
+                    
                     return None
                     
             elif response is None:
@@ -108,15 +135,42 @@ def call_vertex_ai_with_retry(request_body: Dict[str, Any], context: str = "", p
                     continue
                 else:
                     logging.error(f"❌ All retry attempts exhausted for API failure")
+                    
+                    # Log debug information for API failure
+                    if debug_logger:
+                        total_duration_ms = (time.time() - interaction_start_time) * 1000
+                        debug_logger.log_llm_interaction(
+                            context=context,
+                            request_data=_sanitize_request_for_debug(request_body),
+                            response_data={},
+                            processing_time_ms=total_duration_ms,
+                            error="API call failed - all retries exhausted"
+                        )
+                    
                     return None
             else:
                 # Got a response - now process it if requested
+                total_duration_ms = (time.time() - interaction_start_time) * 1000
+                token_usage = response.get('usageMetadata', {})
+                
                 if process_response:
                     try:
                         processed_response = extract_vertex_response_text(response)
+                        
+                        # Log successful debug information
+                        if debug_logger:
+                            debug_logger.log_llm_interaction(
+                                context=context,
+                                request_data=_sanitize_request_for_debug(request_body),
+                                response_data=_sanitize_response_for_debug(response, processed_response),
+                                processing_time_ms=total_duration_ms,
+                                token_usage=token_usage
+                            )
+                        
                         if attempt > 0:
                             logging.info(f"✅ Retry successful after {attempt} attempts")
                         return {'processed_response': processed_response, 'raw_response': response}
+                        
                     except TokenLimitExceededException as tle:
                         if attempt < max_retries:
                             logging.warning(f"⚠️ Response truncated due to MAX_TOKENS, attempting retry {attempt + 1}")
@@ -125,9 +179,30 @@ def call_vertex_ai_with_retry(request_body: Dict[str, Any], context: str = "", p
                             continue
                         else:
                             logging.error(f"❌ All retry attempts exhausted - response still truncated")
+                            
+                            # Log debug information for truncated response
+                            if debug_logger:
+                                debug_logger.log_llm_interaction(
+                                    context=context,
+                                    request_data=_sanitize_request_for_debug(request_body),
+                                    response_data=_sanitize_response_for_debug(response, None),
+                                    processing_time_ms=total_duration_ms,
+                                    token_usage=tle.usage_metadata,
+                                    error=f"Response truncated - {str(tle)}"
+                                )
+                            
                             return None
                 else:
                     # Return raw response without processing
+                    if debug_logger:
+                        debug_logger.log_llm_interaction(
+                            context=context,
+                            request_data=_sanitize_request_for_debug(request_body),
+                            response_data=_sanitize_response_for_debug(response, None),
+                            processing_time_ms=total_duration_ms,
+                            token_usage=token_usage
+                        )
+                    
                     if attempt > 0:
                         logging.info(f"✅ Retry successful after {attempt} attempts")
                     return response
@@ -135,6 +210,16 @@ def call_vertex_ai_with_retry(request_body: Dict[str, Any], context: str = "", p
         except Exception as e:
             logging.error(f"❌ Error in retry attempt {attempt + 1}: {e}")
             if attempt >= max_retries:
+                # Log debug information for final failure
+                if debug_logger:
+                    total_duration_ms = (time.time() - interaction_start_time) * 1000
+                    debug_logger.log_llm_interaction(
+                        context=context,
+                        request_data=_sanitize_request_for_debug(request_body),
+                        response_data={},
+                        processing_time_ms=total_duration_ms,
+                        error=f"Exception in Vertex AI call: {str(e)}"
+                    )
                 return None
             continue
     
@@ -161,6 +246,62 @@ def _increase_output_tokens(request_body: Dict[str, Any], vertex_model: str, att
             logging.info(f"📈 Retry {attempt + 1}: Maxed out maxOutputTokens to model limit: {max_model_output}")
         else:
             logging.error(f"❌ Already at maximum output tokens ({current_max_tokens}), cannot increase further")
+
+
+def _sanitize_request_for_debug(request_body: Dict[str, Any]) -> Dict[str, Any]:
+    """Sanitize request data for debug logging (remove sensitive info, limit size)"""
+    try:
+        # Create a copy to avoid modifying the original
+        sanitized = request_body.copy()
+        
+        # Limit the size of contents for debug logging
+        if 'contents' in sanitized:
+            contents = sanitized['contents']
+            for content in contents:
+                if 'parts' in content:
+                    for part in content['parts']:
+                        if 'text' in part and len(part['text']) > 2000:
+                            part['text'] = part['text'][:2000] + "... [truncated for debug log]"
+        
+        return sanitized
+    except Exception:
+        return {"error": "Failed to sanitize request for debug logging"}
+
+
+def _sanitize_response_for_debug(response_data: Dict[str, Any], processed_response: Optional[str] = None) -> Dict[str, Any]:
+    """Sanitize response data for debug logging (remove sensitive info, limit size)"""
+    try:
+        sanitized = {
+            "success": True,
+            "candidates_count": len(response_data.get('candidates', [])),
+            "usage_metadata": response_data.get('usageMetadata', {}),
+            "safety_ratings": response_data.get('safetyRatings', [])
+        }
+        
+        # Add processed response if available
+        if processed_response:
+            # Limit processed response size
+            if len(processed_response) > 1000:
+                sanitized["processed_response"] = processed_response[:1000] + "... [truncated for debug log]"
+            else:
+                sanitized["processed_response"] = processed_response
+        
+        # Add first candidate content (truncated)
+        candidates = response_data.get('candidates', [])
+        if candidates:
+            first_candidate = candidates[0]
+            if 'content' in first_candidate and 'parts' in first_candidate['content']:
+                parts = first_candidate['content']['parts']
+                if parts and 'text' in parts[0]:
+                    text = parts[0]['text']
+                    if len(text) > 1000:
+                        sanitized["first_candidate_text"] = text[:1000] + "... [truncated for debug log]"
+                    else:
+                        sanitized["first_candidate_text"] = text
+        
+        return sanitized
+    except Exception:
+        return {"error": "Failed to sanitize response for debug logging"}
 
 
 def _log_token_usage(response_data: Dict[str, Any], vertex_model: str) -> None:

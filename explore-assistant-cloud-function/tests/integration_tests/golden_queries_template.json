@@ -1,0 +1,1381 @@
+{
+  "exploreEntries": [
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Which products have more than $10,000 sales",
+      "golden_queries.output": "fields=products.name&f[order_items.total_sales]=%3E10000&sorts=products.name",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How many items that were sold dont have a brand?",
+      "golden_queries.output": "fields=order_items.count&f[products.brand]=NULL",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the weekly trend in product performance across different departments in 2023?",
+      "golden_queries.output": "fields=order_items.total_sales,products.department,order_items.created_week&f[order_items.created_year]=2023&sorts=order_items.created_week+desc+0,order_items.total_sales+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Top 20 popular brands by category at weekly level in the year of 2022",
+      "golden_queries.output": "fields=order_items.total_sales,products.brand,order_items.created_week,products.category&pivots=products.category&f[order_items.created_year]=2022&sorts=products.category,order_items.created_week,order_items.total_sales+desc+0&limit=20",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Which 10 brands do customers not like",
+      "golden_queries.output": "fields=products.brand,order_items.count&sorts=order_items.count&limit=10",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How does the weekly number of orders compare across different demographics in third and forth quarter of 2022?",
+      "golden_queries.output": "fields=orders.count,users.gender,users.age_tiers,orders.created_week&pivots=users.gender,users.age_tiers&f[orders.created_quarter]=3%2C4&f[orders.created_year]=2022",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How does weekly revenue differ across different states in 2022 and 2023?",
+      "golden_queries.output": "fields=order_items.total_sales,users.state,order_items.created_week&fill_fields=order_items.created_week&f[order_items.created_year]=%5B2022%2C2023%5D",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show me a word cloud of total sales by category for women this year",
+      "golden_queries.output": "fields=order_items.total_sales,products.category&f[users.gender]=F&f[order_items.created_date]=2024&sorts=order_items.total_sales+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What brands have had less than 3 orders?",
+      "golden_queries.output": "fields=products.brand&f[orders.sum_num_of_orders]=%3C3&sorts=products.brand",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the weekly trend in customer gender demographics making purchases in 2023?",
+      "golden_queries.output": "fields=order_items.created_week,users.gender,order_items.count_all_orders&f[order_items.created_year]=2023&sorts=order_items.created_week+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Number of users by category that came from Facebook",
+      "golden_queries.output": "fields=users.count,products.category&f[users.traffic_source]=Facebook&sorts=users.count+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How do weekly returns impact revenue across different quarters between 2020 and 2024?",
+      "golden_queries.output": "fields=order_items.total_sales,orders.returned_week,orders.returned_quarter&f[orders.returned_year]=%5B2020%2C2024%5D&sorts=orders.returned_quarter,orders.returned_week+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How does the daily number of orders compare between weekdays and weekends from 2020 to 2024?",
+      "golden_queries.output": "fields=order_items.count_all_orders,order_items.created_day_of_week&f[order_items.created_year]=%5B2020%2C2024%5D",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the monthly trend in returning versus new customers between 2020 and 2024?",
+      "golden_queries.output": "fields=user_session_info.is_returning_customer,user_session_info.count_unique_sessions,users.created_month&pivots=user_session_info.is_returning_customer&f[users.created_year]=%5B2020%2C2024%5D",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "List the brands we were selling before 2022",
+      "golden_queries.output": "fields=products.brand,products.count&f[order_items.created_date]=before+2022%2F01%2F01&sorts=products.count+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Which categories have generated the most revenue? ",
+      "golden_queries.output": "fields=products.category,order_items.total_sales&sorts=order_items.total_sales+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What are my 5 most performant categories",
+      "golden_queries.output": "fields=products.category,order_items.total_sales&sorts=order_items.total_sales+desc+0&limit=5",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How many items haven been returned this month?",
+      "golden_queries.output": "fields=order_items.count&f[order_items.returned_date]=NOT+NULL&f[order_items.created_month]=this+month",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "List all orders that came in yesterday in Maryland",
+      "golden_queries.output": "fields=order_items.order_id&f[order_items.created_date]=last+day&f[users.state]=Maryland&sorts=order_items.order_id",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "List all users that have a lifetime value over 1500",
+      "golden_queries.output": "fields=users.id,users.first_and_last_name,order_items.total_sales&f[order_items.total_sales]=%3E1500&sorts=order_items.total_sales+desc",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Which 5 brands dont bring in much sales",
+      "golden_queries.output": "fields=order_items.total_sales,products.brand&sorts=order_items.total_sales&limit=5",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "what is the average number of days between transactions made by each user in 2022 and 2023",
+      "golden_queries.output": "fields=order_items.created_date,users.id&f[order_items.created_year]=2022%2C2023&sorts=users.id,order_items.created_date+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Top 10 best brands",
+      "golden_queries.output": "fields=products.brand,order_items.total_sales&sorts=order_items.total_sales+desc+0&limit=10",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "List all users that have bought Levis this month",
+      "golden_queries.output": "fields=users.id,users.first_and_last_name&f[products.brand]=%22Levi%27s%22&f[order_items.created_month]=this+month&sorts=users.id",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the weekly trend in user sessions and their correlation with purchase tiers in the first half of 2021?",
+      "golden_queries.output": "fields=user_session_info.count_unique_sessions,user_session_info.purchase_tiers&sorts=user_session_info.created_week+asc+0,user_session_info.purchase_tiers+asc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Which 10 categories are the worst",
+      "golden_queries.output": "fields=order_items.total_sales,products.category&sorts=order_items.total_sales&limit=10",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How many orders did we sell and what were our sales last christmas",
+      "golden_queries.output": "fields=order_items.count_all_orders,order_items.total_sales&f[order_items.created_date]=2023%2F12%2F25",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How does the monthly average sales price of order items differ across different brands in 2021?",
+      "golden_queries.output": "fields=order_items.average_sale_price,products.brand&f[order_items.created_year]=2021&sorts=products.brand,order_items.average_sale_price+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How do monthly orders change during specific months like November and December between 2020 and 2024?",
+      "golden_queries.output": "fields=orders.count,orders.created_month&f[orders.created_year]=%5B2020%2C2024%5D&f[orders.created_month]=%5BNovember%2CDecember%5D",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show me a map of the total sale price per country in the year 2021?",
+      "golden_queries.output": "fields=order_items.total_sales,users.country,users.age_tiers&f[order_items.created_date]=2021&sorts=order_items.total_sales+desc",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the weekly trend in average retail price across different departments in the second half of  2021?",
+      "golden_queries.output": "fields=products.average_retail_price,products.department,order_items.created_week&f[order_items.created_year]=2021&f[order_items.created_month]=%5B07%2C08%2C09%2C10%2C11%2C12%5D",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Which 10 orders have the most spent",
+      "golden_queries.output": "fields=order_items.order_id,order_items.total_sales&sorts=order_items.total_sales+desc+0&limit=10",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "List 10 of the best products",
+      "golden_queries.output": "fields=products.id,products.name,order_items.total_sales&sorts=order_items.total_sales+desc&limit=10",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "In 2021, who were our best customers",
+      "golden_queries.output": "fields=order_items.total_sales,users.first_and_last_name&f[order_items.created_date]=2021&sorts=order_items.total_sales+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Return the total sales and order item count for the last 10 days",
+      "golden_queries.output": "fields=order_items.count,order_items.total_sales&f[order_items.created_date]=10+days&sorts=order_items.count+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What are the weekly revenue trends for each distribution center between 2020 and 2024? Sort them by decrease in order of sales trends displaying top 20",
+      "golden_queries.output": "fields=order_items.total_sales,distribution_centers.name,order_items.created_week&f[order_items.created_year]=%5B2020%2C2024%5D&sorts=order_items.total_sales+desc+0&limit=20",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show how many users signed up each day by gender for the last 30 days",
+      "golden_queries.output": "fields=users.count,users.created_date,users.gender&f[users.created_date]=30+days&sorts=users.created_date+desc",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Who has spent the same or less than $500 with fashion.ly",
+      "golden_queries.output": "fields=users.first_and_last_name&f[order_items.total_sales]=%3C%3D500&sorts=users.first_and_last_name",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How does the weekly number of orders vary across different traffic sources in 2022?",
+      "golden_queries.output": "fields=orders.count,users.traffic_source,orders.created_week&fill_fields=orders.created_week&f[orders.created_year]=2022",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "I want to know the last 10 orders that have a carhart purchase and what gender they were",
+      "golden_queries.output": "fields=order_items.created_date,order_items.order_id,users.gender&f[products.brand]=Carhartt&sorts=order_items.created_date+desc&limit=10",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Since 2022, which brands are most performant",
+      "golden_queries.output": "fields=products.brand,products.count&f[order_items.created_date]=after+2022%2F01%2F01&sorts=products.count+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show total sales by brand by day for the last 30 days",
+      "golden_queries.output": "fields=order_items.total_sales,products.brand,order_items.created_date&f[order_items.created_date]=30+days&sorts=order_items.created_date+desc",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How does weekly revenue from returning customers compare to new customers in 2024 and compare it against 2023 at the annual level?",
+      "golden_queries.output": "fields=order_items.total_sales,user_session_info.is_returning_customer,order_items.created_week,order_items.created_year&pivots=user_session_info.is_returning_customer&f[order_items.created_year]=2024%2C2023&sorts=order_items.created_year,order_items.created_week,order_items.total_sales+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show me total sales by brand in January 2024",
+      "golden_queries.output": "fields=order_items.total_sales,products.brand&f[order_items.created_date]=2024-01&sorts=order_items.total_sales+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What are the most bought categories for men during the christmas season of 2022?",
+      "golden_queries.output": "fields=products.count,products.category&f[users.gender]=M&f[order_items.created_date]=2022-12&sorts=products.count+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show me total sales for men by brand",
+      "golden_queries.output": "fields=order_items.total_sales,products.brand&f[users.gender]=M&sorts=order_items.total_sales+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How many users are male and are from China?",
+      "golden_queries.output": "fields=users.count&f[users.gender]=M&f[users.country]=China",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "I want to know the best brand and category groups of the last 3 weeks",
+      "golden_queries.output": "fields=products.brand,products.category,order_items.count,order_items.total_sales&f[order_items.created_date]=3+weeks&sorts=order_items.count+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the daily trend in average cost and retail price across different departments in 2020?",
+      "golden_queries.output": "fields=products.average_cost,products.average_retail_price,products.department,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_year]=2020",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the monthly fluctuation in the total cost and price of products from 2020 to 2023?",
+      "golden_queries.output": "fields=products.total_cost,products.total_retail_price",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How many users are sourced from Facebook or Google?",
+      "golden_queries.output": "fields=users.count&f[users.traffic_source]=Facebook%2CSearch",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How do daily visits from different traffic sources correlate with daily purchases between 2020 and 2024?",
+      "golden_queries.output": "fields=users.traffic_source,user_session_info.count_unique_sessions,order_items.count_all_orders&f[order_items.created_date]=between+2020%2F01%2F01+and+2024%2F12%2F31",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Who are my 20 highest spending customers",
+      "golden_queries.output": "fields=order_items.total_sales,users.id,users.first_and_last_name&sorts=order_items.total_sales+desc+0&limit=20",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "On average, how many order items are in each order per country?",
+      "golden_queries.output": "fields=order_items.num_order_items_per_order,users.country&sorts=order_items.num_order_items_per_order+desc+0&limit=500",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Lowest 10 orders",
+      "golden_queries.output": "fields=order_items.total_sales,order_items.order_id&sorts=order_items.total_sales&limit=10",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How many brands contain a  jacket category",
+      "golden_queries.output": "fields=products.count_brands&f[products.category]=%25Blazers+%26+Jackets%25",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Are there any categories that have $8000 or more sales?",
+      "golden_queries.output": "fields=products.category&f[order_items.total_sales]=%3E%3D8000&sorts=products.category",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show me gross margin percentage by traffic source in the last 90 days",
+      "golden_queries.output": "fields=products.gross_margin_percentange,users.traffic_source&f[order_items.created_date]=90+days&sorts=products.gross_margin_percentange+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the quarterly return rate past the 30-day policy in 2023?",
+      "golden_queries.output": "fields=order_items.count,orders.returned_quarter&f[order_items.created_year]=2023&f[order_items.is_past_return_policy]=Yes&f[order_items.is_returned]=Yes",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How do monthly visits from different traffic sources correlate with monthly purchases in the last 3 quarters of 2023?",
+      "golden_queries.output": "fields=user_session_info.count_unique_sessions,users.traffic_source,order_items.count_all_orders,order_items.created_month&f[order_items.created_year]=2023&sorts=order_items.created_month,users.traffic_source,order_items.count_all_orders+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "In a single value visualization, how many orders have been created all time?",
+      "golden_queries.output": "fields=orders.sum_num_of_orders",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Which 5 categories sell best in the december",
+      "golden_queries.output": "fields=products.category,order_items.total_sales&f[order_items.created_month_name]=December&sorts=order_items.total_sales+desc&limit=5",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "last year, which products sold the most amount of times?",
+      "golden_queries.output": "fields=products.name,order_items.count&f[order_items.created_date]=last+year&sorts=order_items.count+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the weekly trend in returning versus new customers between 2020 and 2024?",
+      "golden_queries.output": "fields=user_session_info.is_returning_customer,user_session_info.count_unique_sessions&pivots=user_session_info.is_returning_customer&sorts=user_session_info.is_returning_customer,user_session_info.count_unique_sessions",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How does monthly revenue from returning customers compare to new customers in the first 2 quarters in 2021?",
+      "golden_queries.output": "fields=order_items.total_sales,user_session_info.is_returning_customer&pivots=user_session_info.is_returning_customer&f[order_items.created_year]=2021",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the quarterly distribution of order statuses across different years between 2022 and 2023?",
+      "golden_queries.output": "fields=orders.created_quarter,orders.status,orders.count&f[orders.created_year]=%5B2022%2C2023%5D",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What are the top 5 product categories by gender when looking at total sales?",
+      "golden_queries.output": "fields=products.category,order_items.total_sales,users.gender&pivots=users.gender&sorts=users.gender,order_items.total_sales+desc+0&limit=5",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Lowest 5 customers spenders",
+      "golden_queries.output": "fields=users.id,users.first_and_last_name,order_items.total_sales&sorts=order_items.total_sales&limit=5",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Which days have the highest total revenue in history?",
+      "golden_queries.output": "fields=order_items.total_sales,order_items.created_date&fill_fields=order_items.created_date&sorts=order_items.total_sales+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Which 10 brands are being purchased the most",
+      "golden_queries.output": "fields=products.brand,order_items.count&sorts=order_items.count+desc&limit=10",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How many users are located everywhere but the United States?",
+      "golden_queries.output": "fields=users.count&f[users.country]=-United+States",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How does the daily average sales price of order items vary across different brands in 2021?",
+      "golden_queries.output": "fields=order_items.average_sale_price,products.brand,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_year]=2021",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How do quarterly orders change during specific quarters like Q4 between 2020 and 2024?",
+      "golden_queries.output": "fields=orders.count,orders.created_quarter&f[orders.created_year]=%5B2020%2C2024%5D&f[orders.created_quarter]=Q4",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "List the full names of users who have ordered at least 25 times and are over 20 years old",
+      "golden_queries.output": "fields=users.first_and_last_name&f[users.age]=%3E20&f[orders.count]=%3E25&sorts=users.first_and_last_name",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show me a pie chart of total sale price by gender",
+      "golden_queries.output": "fields=order_items.total_sales,users.gender&sorts=order_items.total_sales+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Give me the count of items by brand that have been returned",
+      "golden_queries.output": "fields=order_items.count,products.brand&f[order_items.is_returned]=Yes&sorts=order_items.count+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the daily revenue trend for each product category between 2020 and 2024?",
+      "golden_queries.output": "fields=order_items.total_sales,products.category,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_year]=%5B2020%2C2024%5D&sorts=order_items.created_date+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Which fullnames dont start with the letter L",
+      "golden_queries.output": "fields=users.first_and_last_name&f[users.first_and_last_name]=-L%25&sorts=users.first_and_last_name",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How many users are there per city?",
+      "golden_queries.output": "fields=users.city,users.count&sorts=users.count+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "List all orders over $1000 this year",
+      "golden_queries.output": "fields=order_items.order_id,order_items.total_sales&f[order_items.total_sales]=%3E1000&f[order_items.created_year]=this+year&sorts=order_items.total_sales+desc",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show me user counts by day that purchased Carhart in the last quarter",
+      "golden_queries.output": "fields=users.count,order_items.created_date&fill_fields=order_items.created_date&f[products.brand]=Carhartt&f[order_items.created_date]=last+quarter&sorts=order_items.created_date+desc",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Which products start with the letter G",
+      "golden_queries.output": "fields=products.name&f[products.name]=G%25&sorts=products.name",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Count the orders over $10 by day for the last 30 days",
+      "golden_queries.output": "fields=order_items.count_all_orders,order_items.created_date&f[order_items.created_date]=30+days&f[order_items.total_sales]=%3E10&sorts=order_items.created_date+desc",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "create a bar chart displaying the revenue by brand at the daily level in the current month",
+      "golden_queries.output": "fields=order_items.total_sales,products.brand,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_month]=this+month&sorts=order_items.created_date+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the daily trend in new versus returning customers in 2023?",
+      "golden_queries.output": "fields=user_session_info.is_returning_customer,user_session_info.count_unique_sessions,user_session_info.user_id,users.created_date&fill_fields=users.created_date&f[users.created_year]=2023",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How does the number of daily orders change during holiday seasons between 2020 and 2024?",
+      "golden_queries.output": "fields=order_items.count_all_orders,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_year]=%5B2020%2C2024%5D",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What are the daily return rates past the 30-day policy between January 2021 and December 2023?",
+      "golden_queries.output": "fields=order_items.total_sales,distribution_centers.name,order_items.created_date&f[order_items.created_year]=2022",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the total sale price by age tier sliced by gender in the year 2022 with no returned items?",
+      "golden_queries.output": "fields=order_items.total_sales,users.age_tiers,users.gender&pivots=users.gender&f[order_items.created_date]=2022&f[order_items.is_returned]=No&sorts=users.gender",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show me the highest total sale prices per order",
+      "golden_queries.output": "fields=orders.order_id,order_items.total_sales&sorts=order_items.total_sales+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the daily fluctuation in the total cost and price of products from different distribution centers in 2022?",
+      "golden_queries.output": "fields=products.total_cost,products.average_retail_price,products.distribution_center_id,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_year]=2022",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Lowest 15 performing brands",
+      "golden_queries.output": "fields=order_items.total_sales,products.brand&sorts=order_items.total_sales&limit=15",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What 10 categories arent performing the best",
+      "golden_queries.output": "fields=products.category,order_items.total_sales&sorts=order_items.total_sales&limit=10",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "For the last 6 months show the totals sales by state in the US",
+      "golden_queries.output": "fields=order_items.total_sales,users.state&f[users.country]=United+States&f[order_items.created_month]=6+months&sorts=order_items.total_sales+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Which brands do not contain socks",
+      "golden_queries.output": "fields=products.brand&f[products.category]=-%25Socks%25&sorts=products.brand",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Which days this month did we sell less than $200,000 dollars?",
+      "golden_queries.output": "fields=order_items.created_date&f[order_items.created_month]=this+month&f[order_items.total_sales]=%3C200000&sorts=order_items.created_date+desc",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the daily distribution of order statuses (e.g., completed, canceled) in 2024?",
+      "golden_queries.output": "fields=order_items.status,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_year]=2024",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the weekly distribution of order statuses across different months in summer of 2022?",
+      "golden_queries.output": "fields=orders.created_week,orders.status,orders.created_month&f[orders.created_month]=%5B2022%2F06%2C2022%2F08%5D",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How does the weekly sales YTD trend vary across different brands in the second half of 2022 and the first half of 2023?",
+      "golden_queries.output": "fields=order_items.total_sales,products.brand,order_items.created_week&pivots=products.brand&fill_fields=order_items.created_week&f[order_items.created_year]=2022%2C2023&f[order_items.created_month]=%5B07%2C08%2C09%2C10%2C11%2C12%5D%2C%5B01%2C02%2C03%2C04%2C05%2C06%5D",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How much did each user spend between March of 2020 up until now? ",
+      "golden_queries.output": "fields=order_items.total_sales,users.id&f[order_items.created_month]=after+2020%2F03%2F01&sorts=order_items.total_sales+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How many users are in each country by age tier in a stacked column chart?",
+      "golden_queries.output": "fields=users.country,users.count,users.age_tiers&pivots=users.age_tiers&fill_fields=users.age_tiers&sorts=users.age_tiers,users.count+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show total sales by state pivoted by gender in the United States this month",
+      "golden_queries.output": "fields=order_items.total_sales,users.state,users.gender&pivots=users.gender&f[users.country]=United+States&f[order_items.created_month]=this+month&sorts=users.gender,order_items.total_sales+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How do monthly sales vary across different product categories in first 3 quarters of 2022?",
+      "golden_queries.output": "fields=order_items.total_sales,products.category,order_items.created_month&f[order_items.created_year]=2022",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How does the monthly number of orders compare across different demographics in the last 9 months?",
+      "golden_queries.output": "fields=orders.count,users.gender,users.age_tiers,users.country&pivots=users.gender,users.age_tiers,users.country&f[orders.created_date]=9+months&sorts=users.gender,users.age_tiers,users.country",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show me 10 customers with the most purchases",
+      "golden_queries.output": "fields=users.id,users.first_and_last_name,order_items.count_all_orders&sorts=order_items.count_all_orders+desc+0&limit=10",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How many distinct categories were sold each day in the past 90 days?",
+      "golden_queries.output": "fields=products.count_categories,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_date]=90+days&sorts=order_items.created_date+desc",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show me 5 of the worst products",
+      "golden_queries.output": "fields=products.id,products.name,order_items.total_sales&sorts=order_items.total_sales&limit=5",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How do daily sales vary across different distribution centers in 2022?",
+      "golden_queries.output": "fields=order_items.total_sales,distribution_centers.name,order_items.created_date&f[order_items.created_year]=2022",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show the user count by age tier in alabama, united states",
+      "golden_queries.output": "fields=users.count,users.age_tiers&fill_fields=users.age_tiers&f[users.state]=Alabama&f[users.country]=United+States",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the monthly distribution of purchases by session tiers from 2020 to 2023 except first 6 months of 2020 due to pandemic?",
+      "golden_queries.output": "fields=user_session_info.count_unique_sessions,user_session_info.session_tiers,order_items.created_month&f[order_items.created_year]=%5B2020%2C2023%5D&f[order_items.created_month]=after+2020%2F06%2F01&sorts=order_items.created_month+desc+0,user_session_info.session_tiers+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "How do weekly visits from different traffic sources correlate with weekly purchases in 2023?",
+      "golden_queries.output": "fields=user_session_info.count_unique_sessions,user_session_info.number_of_purchases,users.traffic_source,order_items.created_week&pivots=users.traffic_source&f[order_items.created_year]=2023",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What is the monthly distribution of order statuses across different years between the second half of 2020 and the third quarter of 2023?",
+      "golden_queries.output": "fields=order_items.status,order_items.created_month,order_items.created_year&f[order_items.created_date]=between+2020%2F07%2F01+and+2023%2F09%2F30",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "In the last 3 years, which 5 countries attributed the most to my total sales",
+      "golden_queries.output": "fields=order_items.total_sales,users.country&f[order_items.created_date]=3+years&sorts=order_items.total_sales+desc+0&limit=5",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Show total sales by gender by state in the United States this year",
+      "golden_queries.output": "fields=users.gender,users.state,order_items.total_sales&f[users.country]=United+States&f[order_items.created_year]=this+year&sorts=order_items.total_sales+desc",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "Give me the worse 5 products in terms of top sales",
+      "golden_queries.output": "fields=order_items.total_sales,products.name&sorts=order_items.total_sales&limit=5&vis=%7B%7D&filter_config=%7B%7D&origin=share-expanded",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "in the last 6 months, i need to know which gender and city did best in terms of sales",
+      "golden_queries.output": "fields=order_items.total_sales,users.gender,users.city&f[order_items.created_date]=6+months&sorts=order_items.total_sales+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "What are top 10 distribution center with the average monthly orders in the past 6 months",
+      "golden_queries.output": "fields=order_items.total_sales,products.brand,distribution_centers.name,orders.count&f[order_items.created_date]=6+months&sorts=order_items.total_sales+desc+0,orders.count+desc+0&limit=10",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "ecommerce_order_items:order_items",
+      "golden_queries.input": "List the orders this week that have sales between $80 and $120 and the names of those people",
+      "golden_queries.output": "fields=order_items.order_id,users.first_and_last_name&f[order_items.total_sales]=%5B80%2C120%5D&sorts=order_items.order_id",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "retail_data_sr:shoe_store",
+      "golden_queries.input": "What were the total sales by department and pivot on store",
+      "golden_queries.output": "fields=shoe_store.total_extended_retail,shoe_store.department_name,shoe_store.store&pivots=shoe_store.store&sorts=shoe_store.store,shoe_store.total_extended_retail+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "retail_data_sr:shoe_store",
+      "golden_queries.input": "What were the total sales for womens boots in the last 6 months",
+      "golden_queries.output": "fields=shoe_store.total_extended_retail&f[shoe_store.department_name]=Womens+Shoes&f[shoe_store.class]=BOOT&f[shoe_store.new_trans_date_date]=6+months",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "retail_data_sr:shoe_store",
+      "golden_queries.input": "What are the count of orders by vendor for local customers",
+      "golden_queries.output": "fields=shoe_store.count_tickets,shoe_store.vendor&f[shoe_store.is_local]=Local&sorts=shoe_store.count_tickets+desc+0",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    },
+    {
+      "golden_queries.explore_id": "retail_data_sr:shoe_store",
+      "golden_queries.input": "Who were the top 10 vendors based on the lowest average discount in the last year",
+      "golden_queries.output": "fields=shoe_store.avg_discount,shoe_store.vendor&f[shoe_store.new_trans_date_year]=1+years&sorts=shoe_store.avg_discount+desc&limit=10",
+      "explore_assistant_refinement_examples.examples": "[{\"input\": [\"make a chart of sales by region\", \"make it a an area chart\", \"make it a table\"], \"output\": \"make a chart of sales by region make it a table\"}, {\"input\": [\"show me sales by region\", \"by product\"], \"output\": \"show me sales by region and product\"}]",
+      "explore_assistant_samples.samples": null
+    }
+  ],
+  "exploreGenerationExamples": {
+    "ecommerce_order_items:order_items": [
+      {
+        "input": "Which products have more than $10,000 sales",
+        "output": "fields=products.name&f[order_items.total_sales]=%3E10000&sorts=products.name"
+      },
+      {
+        "input": "How many items that were sold dont have a brand?",
+        "output": "fields=order_items.count&f[products.brand]=NULL"
+      },
+      {
+        "input": "What is the weekly trend in product performance across different departments in 2023?",
+        "output": "fields=order_items.total_sales,products.department,order_items.created_week&f[order_items.created_year]=2023&sorts=order_items.created_week+desc+0,order_items.total_sales+desc+0"
+      },
+      {
+        "input": "Top 20 popular brands by category at weekly level in the year of 2022",
+        "output": "fields=order_items.total_sales,products.brand,order_items.created_week,products.category&pivots=products.category&f[order_items.created_year]=2022&sorts=products.category,order_items.created_week,order_items.total_sales+desc+0&limit=20"
+      },
+      {
+        "input": "Which 10 brands do customers not like",
+        "output": "fields=products.brand,order_items.count&sorts=order_items.count&limit=10"
+      },
+      {
+        "input": "How does the weekly number of orders compare across different demographics in third and forth quarter of 2022?",
+        "output": "fields=orders.count,users.gender,users.age_tiers,orders.created_week&pivots=users.gender,users.age_tiers&f[orders.created_quarter]=3%2C4&f[orders.created_year]=2022"
+      },
+      {
+        "input": "How does weekly revenue differ across different states in 2022 and 2023?",
+        "output": "fields=order_items.total_sales,users.state,order_items.created_week&fill_fields=order_items.created_week&f[order_items.created_year]=%5B2022%2C2023%5D"
+      },
+      {
+        "input": "Show me a word cloud of total sales by category for women this year",
+        "output": "fields=order_items.total_sales,products.category&f[users.gender]=F&f[order_items.created_date]=2024&sorts=order_items.total_sales+desc+0"
+      },
+      {
+        "input": "What brands have had less than 3 orders?",
+        "output": "fields=products.brand&f[orders.sum_num_of_orders]=%3C3&sorts=products.brand"
+      },
+      {
+        "input": "What is the weekly trend in customer gender demographics making purchases in 2023?",
+        "output": "fields=order_items.created_week,users.gender,order_items.count_all_orders&f[order_items.created_year]=2023&sorts=order_items.created_week+desc+0"
+      },
+      {
+        "input": "Number of users by category that came from Facebook",
+        "output": "fields=users.count,products.category&f[users.traffic_source]=Facebook&sorts=users.count+desc+0"
+      },
+      {
+        "input": "How do weekly returns impact revenue across different quarters between 2020 and 2024?",
+        "output": "fields=order_items.total_sales,orders.returned_week,orders.returned_quarter&f[orders.returned_year]=%5B2020%2C2024%5D&sorts=orders.returned_quarter,orders.returned_week+desc+0"
+      },
+      {
+        "input": "How does the daily number of orders compare between weekdays and weekends from 2020 to 2024?",
+        "output": "fields=order_items.count_all_orders,order_items.created_day_of_week&f[order_items.created_year]=%5B2020%2C2024%5D"
+      },
+      {
+        "input": "What is the monthly trend in returning versus new customers between 2020 and 2024?",
+        "output": "fields=user_session_info.is_returning_customer,user_session_info.count_unique_sessions,users.created_month&pivots=user_session_info.is_returning_customer&f[users.created_year]=%5B2020%2C2024%5D"
+      },
+      {
+        "input": "List the brands we were selling before 2022",
+        "output": "fields=products.brand,products.count&f[order_items.created_date]=before+2022%2F01%2F01&sorts=products.count+desc+0"
+      },
+      {
+        "input": "Which categories have generated the most revenue? ",
+        "output": "fields=products.category,order_items.total_sales&sorts=order_items.total_sales+desc+0"
+      },
+      {
+        "input": "What are my 5 most performant categories",
+        "output": "fields=products.category,order_items.total_sales&sorts=order_items.total_sales+desc+0&limit=5"
+      },
+      {
+        "input": "How many items haven been returned this month?",
+        "output": "fields=order_items.count&f[order_items.returned_date]=NOT+NULL&f[order_items.created_month]=this+month"
+      },
+      {
+        "input": "List all orders that came in yesterday in Maryland",
+        "output": "fields=order_items.order_id&f[order_items.created_date]=last+day&f[users.state]=Maryland&sorts=order_items.order_id"
+      },
+      {
+        "input": "List all users that have a lifetime value over 1500",
+        "output": "fields=users.id,users.first_and_last_name,order_items.total_sales&f[order_items.total_sales]=%3E1500&sorts=order_items.total_sales+desc"
+      },
+      {
+        "input": "Which 5 brands dont bring in much sales",
+        "output": "fields=order_items.total_sales,products.brand&sorts=order_items.total_sales&limit=5"
+      },
+      {
+        "input": "what is the average number of days between transactions made by each user in 2022 and 2023",
+        "output": "fields=order_items.created_date,users.id&f[order_items.created_year]=2022%2C2023&sorts=users.id,order_items.created_date+desc+0"
+      },
+      {
+        "input": "Top 10 best brands",
+        "output": "fields=products.brand,order_items.total_sales&sorts=order_items.total_sales+desc+0&limit=10"
+      },
+      {
+        "input": "List all users that have bought Levis this month",
+        "output": "fields=users.id,users.first_and_last_name&f[products.brand]=%22Levi%27s%22&f[order_items.created_month]=this+month&sorts=users.id"
+      },
+      {
+        "input": "What is the weekly trend in user sessions and their correlation with purchase tiers in the first half of 2021?",
+        "output": "fields=user_session_info.count_unique_sessions,user_session_info.purchase_tiers&sorts=user_session_info.created_week+asc+0,user_session_info.purchase_tiers+asc+0"
+      },
+      {
+        "input": "Which 10 categories are the worst",
+        "output": "fields=order_items.total_sales,products.category&sorts=order_items.total_sales&limit=10"
+      },
+      {
+        "input": "How many orders did we sell and what were our sales last christmas",
+        "output": "fields=order_items.count_all_orders,order_items.total_sales&f[order_items.created_date]=2023%2F12%2F25"
+      },
+      {
+        "input": "How does the monthly average sales price of order items differ across different brands in 2021?",
+        "output": "fields=order_items.average_sale_price,products.brand&f[order_items.created_year]=2021&sorts=products.brand,order_items.average_sale_price+desc+0"
+      },
+      {
+        "input": "How do monthly orders change during specific months like November and December between 2020 and 2024?",
+        "output": "fields=orders.count,orders.created_month&f[orders.created_year]=%5B2020%2C2024%5D&f[orders.created_month]=%5BNovember%2CDecember%5D"
+      },
+      {
+        "input": "Show me a map of the total sale price per country in the year 2021?",
+        "output": "fields=order_items.total_sales,users.country,users.age_tiers&f[order_items.created_date]=2021&sorts=order_items.total_sales+desc"
+      },
+      {
+        "input": "What is the weekly trend in average retail price across different departments in the second half of  2021?",
+        "output": "fields=products.average_retail_price,products.department,order_items.created_week&f[order_items.created_year]=2021&f[order_items.created_month]=%5B07%2C08%2C09%2C10%2C11%2C12%5D"
+      },
+      {
+        "input": "Which 10 orders have the most spent",
+        "output": "fields=order_items.order_id,order_items.total_sales&sorts=order_items.total_sales+desc+0&limit=10"
+      },
+      {
+        "input": "List 10 of the best products",
+        "output": "fields=products.id,products.name,order_items.total_sales&sorts=order_items.total_sales+desc&limit=10"
+      },
+      {
+        "input": "In 2021, who were our best customers",
+        "output": "fields=order_items.total_sales,users.first_and_last_name&f[order_items.created_date]=2021&sorts=order_items.total_sales+desc+0"
+      },
+      {
+        "input": "Return the total sales and order item count for the last 10 days",
+        "output": "fields=order_items.count,order_items.total_sales&f[order_items.created_date]=10+days&sorts=order_items.count+desc+0"
+      },
+      {
+        "input": "What are the weekly revenue trends for each distribution center between 2020 and 2024? Sort them by decrease in order of sales trends displaying top 20",
+        "output": "fields=order_items.total_sales,distribution_centers.name,order_items.created_week&f[order_items.created_year]=%5B2020%2C2024%5D&sorts=order_items.total_sales+desc+0&limit=20"
+      },
+      {
+        "input": "Show how many users signed up each day by gender for the last 30 days",
+        "output": "fields=users.count,users.created_date,users.gender&f[users.created_date]=30+days&sorts=users.created_date+desc"
+      },
+      {
+        "input": "Who has spent the same or less than $500 with fashion.ly",
+        "output": "fields=users.first_and_last_name&f[order_items.total_sales]=%3C%3D500&sorts=users.first_and_last_name"
+      },
+      {
+        "input": "How does the weekly number of orders vary across different traffic sources in 2022?",
+        "output": "fields=orders.count,users.traffic_source,orders.created_week&fill_fields=orders.created_week&f[orders.created_year]=2022"
+      },
+      {
+        "input": "I want to know the last 10 orders that have a carhart purchase and what gender they were",
+        "output": "fields=order_items.created_date,order_items.order_id,users.gender&f[products.brand]=Carhartt&sorts=order_items.created_date+desc&limit=10"
+      },
+      {
+        "input": "Since 2022, which brands are most performant",
+        "output": "fields=products.brand,products.count&f[order_items.created_date]=after+2022%2F01%2F01&sorts=products.count+desc+0"
+      },
+      {
+        "input": "Show total sales by brand by day for the last 30 days",
+        "output": "fields=order_items.total_sales,products.brand,order_items.created_date&f[order_items.created_date]=30+days&sorts=order_items.created_date+desc"
+      },
+      {
+        "input": "How does weekly revenue from returning customers compare to new customers in 2024 and compare it against 2023 at the annual level?",
+        "output": "fields=order_items.total_sales,user_session_info.is_returning_customer,order_items.created_week,order_items.created_year&pivots=user_session_info.is_returning_customer&f[order_items.created_year]=2024%2C2023&sorts=order_items.created_year,order_items.created_week,order_items.total_sales+desc+0"
+      },
+      {
+        "input": "Show me total sales by brand in January 2024",
+        "output": "fields=order_items.total_sales,products.brand&f[order_items.created_date]=2024-01&sorts=order_items.total_sales+desc+0"
+      },
+      {
+        "input": "What are the most bought categories for men during the christmas season of 2022?",
+        "output": "fields=products.count,products.category&f[users.gender]=M&f[order_items.created_date]=2022-12&sorts=products.count+desc+0"
+      },
+      {
+        "input": "Show me total sales for men by brand",
+        "output": "fields=order_items.total_sales,products.brand&f[users.gender]=M&sorts=order_items.total_sales+desc+0"
+      },
+      {
+        "input": "How many users are male and are from China?",
+        "output": "fields=users.count&f[users.gender]=M&f[users.country]=China"
+      },
+      {
+        "input": "I want to know the best brand and category groups of the last 3 weeks",
+        "output": "fields=products.brand,products.category,order_items.count,order_items.total_sales&f[order_items.created_date]=3+weeks&sorts=order_items.count+desc+0"
+      },
+      {
+        "input": "What is the daily trend in average cost and retail price across different departments in 2020?",
+        "output": "fields=products.average_cost,products.average_retail_price,products.department,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_year]=2020"
+      },
+      {
+        "input": "What is the monthly fluctuation in the total cost and price of products from 2020 to 2023?",
+        "output": "fields=products.total_cost,products.total_retail_price"
+      },
+      {
+        "input": "How many users are sourced from Facebook or Google?",
+        "output": "fields=users.count&f[users.traffic_source]=Facebook%2CSearch"
+      },
+      {
+        "input": "How do daily visits from different traffic sources correlate with daily purchases between 2020 and 2024?",
+        "output": "fields=users.traffic_source,user_session_info.count_unique_sessions,order_items.count_all_orders&f[order_items.created_date]=between+2020%2F01%2F01+and+2024%2F12%2F31"
+      },
+      {
+        "input": "Who are my 20 highest spending customers",
+        "output": "fields=order_items.total_sales,users.id,users.first_and_last_name&sorts=order_items.total_sales+desc+0&limit=20"
+      },
+      {
+        "input": "On average, how many order items are in each order per country?",
+        "output": "fields=order_items.num_order_items_per_order,users.country&sorts=order_items.num_order_items_per_order+desc+0&limit=500"
+      },
+      {
+        "input": "Lowest 10 orders",
+        "output": "fields=order_items.total_sales,order_items.order_id&sorts=order_items.total_sales&limit=10"
+      },
+      {
+        "input": "How many brands contain a  jacket category",
+        "output": "fields=products.count_brands&f[products.category]=%25Blazers+%26+Jackets%25"
+      },
+      {
+        "input": "Are there any categories that have $8000 or more sales?",
+        "output": "fields=products.category&f[order_items.total_sales]=%3E%3D8000&sorts=products.category"
+      },
+      {
+        "input": "Show me gross margin percentage by traffic source in the last 90 days",
+        "output": "fields=products.gross_margin_percentange,users.traffic_source&f[order_items.created_date]=90+days&sorts=products.gross_margin_percentange+desc+0"
+      },
+      {
+        "input": "What is the quarterly return rate past the 30-day policy in 2023?",
+        "output": "fields=order_items.count,orders.returned_quarter&f[order_items.created_year]=2023&f[order_items.is_past_return_policy]=Yes&f[order_items.is_returned]=Yes"
+      },
+      {
+        "input": "How do monthly visits from different traffic sources correlate with monthly purchases in the last 3 quarters of 2023?",
+        "output": "fields=user_session_info.count_unique_sessions,users.traffic_source,order_items.count_all_orders,order_items.created_month&f[order_items.created_year]=2023&sorts=order_items.created_month,users.traffic_source,order_items.count_all_orders+desc+0"
+      },
+      {
+        "input": "In a single value visualization, how many orders have been created all time?",
+        "output": "fields=orders.sum_num_of_orders"
+      },
+      {
+        "input": "Which 5 categories sell best in the december",
+        "output": "fields=products.category,order_items.total_sales&f[order_items.created_month_name]=December&sorts=order_items.total_sales+desc&limit=5"
+      },
+      {
+        "input": "last year, which products sold the most amount of times?",
+        "output": "fields=products.name,order_items.count&f[order_items.created_date]=last+year&sorts=order_items.count+desc+0"
+      },
+      {
+        "input": "What is the weekly trend in returning versus new customers between 2020 and 2024?",
+        "output": "fields=user_session_info.is_returning_customer,user_session_info.count_unique_sessions&pivots=user_session_info.is_returning_customer&sorts=user_session_info.is_returning_customer,user_session_info.count_unique_sessions"
+      },
+      {
+        "input": "How does monthly revenue from returning customers compare to new customers in the first 2 quarters in 2021?",
+        "output": "fields=order_items.total_sales,user_session_info.is_returning_customer&pivots=user_session_info.is_returning_customer&f[order_items.created_year]=2021"
+      },
+      {
+        "input": "What is the quarterly distribution of order statuses across different years between 2022 and 2023?",
+        "output": "fields=orders.created_quarter,orders.status,orders.count&f[orders.created_year]=%5B2022%2C2023%5D"
+      },
+      {
+        "input": "What are the top 5 product categories by gender when looking at total sales?",
+        "output": "fields=products.category,order_items.total_sales,users.gender&pivots=users.gender&sorts=users.gender,order_items.total_sales+desc+0&limit=5"
+      },
+      {
+        "input": "Lowest 5 customers spenders",
+        "output": "fields=users.id,users.first_and_last_name,order_items.total_sales&sorts=order_items.total_sales&limit=5"
+      },
+      {
+        "input": "Which days have the highest total revenue in history?",
+        "output": "fields=order_items.total_sales,order_items.created_date&fill_fields=order_items.created_date&sorts=order_items.total_sales+desc+0"
+      },
+      {
+        "input": "Which 10 brands are being purchased the most",
+        "output": "fields=products.brand,order_items.count&sorts=order_items.count+desc&limit=10"
+      },
+      {
+        "input": "How many users are located everywhere but the United States?",
+        "output": "fields=users.count&f[users.country]=-United+States"
+      },
+      {
+        "input": "How does the daily average sales price of order items vary across different brands in 2021?",
+        "output": "fields=order_items.average_sale_price,products.brand,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_year]=2021"
+      },
+      {
+        "input": "How do quarterly orders change during specific quarters like Q4 between 2020 and 2024?",
+        "output": "fields=orders.count,orders.created_quarter&f[orders.created_year]=%5B2020%2C2024%5D&f[orders.created_quarter]=Q4"
+      },
+      {
+        "input": "List the full names of users who have ordered at least 25 times and are over 20 years old",
+        "output": "fields=users.first_and_last_name&f[users.age]=%3E20&f[orders.count]=%3E25&sorts=users.first_and_last_name"
+      },
+      {
+        "input": "Show me a pie chart of total sale price by gender",
+        "output": "fields=order_items.total_sales,users.gender&sorts=order_items.total_sales+desc+0"
+      },
+      {
+        "input": "Give me the count of items by brand that have been returned",
+        "output": "fields=order_items.count,products.brand&f[order_items.is_returned]=Yes&sorts=order_items.count+desc+0"
+      },
+      {
+        "input": "What is the daily revenue trend for each product category between 2020 and 2024?",
+        "output": "fields=order_items.total_sales,products.category,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_year]=%5B2020%2C2024%5D&sorts=order_items.created_date+desc+0"
+      },
+      {
+        "input": "Which fullnames dont start with the letter L",
+        "output": "fields=users.first_and_last_name&f[users.first_and_last_name]=-L%25&sorts=users.first_and_last_name"
+      },
+      {
+        "input": "How many users are there per city?",
+        "output": "fields=users.city,users.count&sorts=users.count+desc+0"
+      },
+      {
+        "input": "List all orders over $1000 this year",
+        "output": "fields=order_items.order_id,order_items.total_sales&f[order_items.total_sales]=%3E1000&f[order_items.created_year]=this+year&sorts=order_items.total_sales+desc"
+      },
+      {
+        "input": "Show me user counts by day that purchased Carhart in the last quarter",
+        "output": "fields=users.count,order_items.created_date&fill_fields=order_items.created_date&f[products.brand]=Carhartt&f[order_items.created_date]=last+quarter&sorts=order_items.created_date+desc"
+      },
+      {
+        "input": "Which products start with the letter G",
+        "output": "fields=products.name&f[products.name]=G%25&sorts=products.name"
+      },
+      {
+        "input": "Count the orders over $10 by day for the last 30 days",
+        "output": "fields=order_items.count_all_orders,order_items.created_date&f[order_items.created_date]=30+days&f[order_items.total_sales]=%3E10&sorts=order_items.created_date+desc"
+      },
+      {
+        "input": "create a bar chart displaying the revenue by brand at the daily level in the current month",
+        "output": "fields=order_items.total_sales,products.brand,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_month]=this+month&sorts=order_items.created_date+desc+0"
+      },
+      {
+        "input": "What is the daily trend in new versus returning customers in 2023?",
+        "output": "fields=user_session_info.is_returning_customer,user_session_info.count_unique_sessions,user_session_info.user_id,users.created_date&fill_fields=users.created_date&f[users.created_year]=2023"
+      },
+      {
+        "input": "How does the number of daily orders change during holiday seasons between 2020 and 2024?",
+        "output": "fields=order_items.count_all_orders,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_year]=%5B2020%2C2024%5D"
+      },
+      {
+        "input": "What are the daily return rates past the 30-day policy between January 2021 and December 2023?",
+        "output": "fields=order_items.total_sales,distribution_centers.name,order_items.created_date&f[order_items.created_year]=2022"
+      },
+      {
+        "input": "What is the total sale price by age tier sliced by gender in the year 2022 with no returned items?",
+        "output": "fields=order_items.total_sales,users.age_tiers,users.gender&pivots=users.gender&f[order_items.created_date]=2022&f[order_items.is_returned]=No&sorts=users.gender"
+      },
+      {
+        "input": "Show me the highest total sale prices per order",
+        "output": "fields=orders.order_id,order_items.total_sales&sorts=order_items.total_sales+desc+0"
+      },
+      {
+        "input": "What is the daily fluctuation in the total cost and price of products from different distribution centers in 2022?",
+        "output": "fields=products.total_cost,products.average_retail_price,products.distribution_center_id,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_year]=2022"
+      },
+      {
+        "input": "Lowest 15 performing brands",
+        "output": "fields=order_items.total_sales,products.brand&sorts=order_items.total_sales&limit=15"
+      },
+      {
+        "input": "What 10 categories arent performing the best",
+        "output": "fields=products.category,order_items.total_sales&sorts=order_items.total_sales&limit=10"
+      },
+      {
+        "input": "For the last 6 months show the totals sales by state in the US",
+        "output": "fields=order_items.total_sales,users.state&f[users.country]=United+States&f[order_items.created_month]=6+months&sorts=order_items.total_sales+desc+0"
+      },
+      {
+        "input": "Which brands do not contain socks",
+        "output": "fields=products.brand&f[products.category]=-%25Socks%25&sorts=products.brand"
+      },
+      {
+        "input": "Which days this month did we sell less than $200,000 dollars?",
+        "output": "fields=order_items.created_date&f[order_items.created_month]=this+month&f[order_items.total_sales]=%3C200000&sorts=order_items.created_date+desc"
+      },
+      {
+        "input": "What is the daily distribution of order statuses (e.g., completed, canceled) in 2024?",
+        "output": "fields=order_items.status,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_year]=2024"
+      },
+      {
+        "input": "What is the weekly distribution of order statuses across different months in summer of 2022?",
+        "output": "fields=orders.created_week,orders.status,orders.created_month&f[orders.created_month]=%5B2022%2F06%2C2022%2F08%5D"
+      },
+      {
+        "input": "How does the weekly sales YTD trend vary across different brands in the second half of 2022 and the first half of 2023?",
+        "output": "fields=order_items.total_sales,products.brand,order_items.created_week&pivots=products.brand&fill_fields=order_items.created_week&f[order_items.created_year]=2022%2C2023&f[order_items.created_month]=%5B07%2C08%2C09%2C10%2C11%2C12%5D%2C%5B01%2C02%2C03%2C04%2C05%2C06%5D"
+      },
+      {
+        "input": "How much did each user spend between March of 2020 up until now? ",
+        "output": "fields=order_items.total_sales,users.id&f[order_items.created_month]=after+2020%2F03%2F01&sorts=order_items.total_sales+desc+0"
+      },
+      {
+        "input": "How many users are in each country by age tier in a stacked column chart?",
+        "output": "fields=users.country,users.count,users.age_tiers&pivots=users.age_tiers&fill_fields=users.age_tiers&sorts=users.age_tiers,users.count+desc+0"
+      },
+      {
+        "input": "Show total sales by state pivoted by gender in the United States this month",
+        "output": "fields=order_items.total_sales,users.state,users.gender&pivots=users.gender&f[users.country]=United+States&f[order_items.created_month]=this+month&sorts=users.gender,order_items.total_sales+desc+0"
+      },
+      {
+        "input": "How do monthly sales vary across different product categories in first 3 quarters of 2022?",
+        "output": "fields=order_items.total_sales,products.category,order_items.created_month&f[order_items.created_year]=2022"
+      },
+      {
+        "input": "How does the monthly number of orders compare across different demographics in the last 9 months?",
+        "output": "fields=orders.count,users.gender,users.age_tiers,users.country&pivots=users.gender,users.age_tiers,users.country&f[orders.created_date]=9+months&sorts=users.gender,users.age_tiers,users.country"
+      },
+      {
+        "input": "Show me 10 customers with the most purchases",
+        "output": "fields=users.id,users.first_and_last_name,order_items.count_all_orders&sorts=order_items.count_all_orders+desc+0&limit=10"
+      },
+      {
+        "input": "How many distinct categories were sold each day in the past 90 days?",
+        "output": "fields=products.count_categories,order_items.created_date&fill_fields=order_items.created_date&f[order_items.created_date]=90+days&sorts=order_items.created_date+desc"
+      },
+      {
+        "input": "Show me 5 of the worst products",
+        "output": "fields=products.id,products.name,order_items.total_sales&sorts=order_items.total_sales&limit=5"
+      },
+      {
+        "input": "How do daily sales vary across different distribution centers in 2022?",
+        "output": "fields=order_items.total_sales,distribution_centers.name,order_items.created_date&f[order_items.created_year]=2022"
+      },
+      {
+        "input": "Show the user count by age tier in alabama, united states",
+        "output": "fields=users.count,users.age_tiers&fill_fields=users.age_tiers&f[users.state]=Alabama&f[users.country]=United+States"
+      },
+      {
+        "input": "What is the monthly distribution of purchases by session tiers from 2020 to 2023 except first 6 months of 2020 due to pandemic?",
+        "output": "fields=user_session_info.count_unique_sessions,user_session_info.session_tiers,order_items.created_month&f[order_items.created_year]=%5B2020%2C2023%5D&f[order_items.created_month]=after+2020%2F06%2F01&sorts=order_items.created_month+desc+0,user_session_info.session_tiers+desc+0"
+      },
+      {
+        "input": "How do weekly visits from different traffic sources correlate with weekly purchases in 2023?",
+        "output": "fields=user_session_info.count_unique_sessions,user_session_info.number_of_purchases,users.traffic_source,order_items.created_week&pivots=users.traffic_source&f[order_items.created_year]=2023"
+      },
+      {
+        "input": "What is the monthly distribution of order statuses across different years between the second half of 2020 and the third quarter of 2023?",
+        "output": "fields=order_items.status,order_items.created_month,order_items.created_year&f[order_items.created_date]=between+2020%2F07%2F01+and+2023%2F09%2F30"
+      },
+      {
+        "input": "In the last 3 years, which 5 countries attributed the most to my total sales",
+        "output": "fields=order_items.total_sales,users.country&f[order_items.created_date]=3+years&sorts=order_items.total_sales+desc+0&limit=5"
+      },
+      {
+        "input": "Show total sales by gender by state in the United States this year",
+        "output": "fields=users.gender,users.state,order_items.total_sales&f[users.country]=United+States&f[order_items.created_year]=this+year&sorts=order_items.total_sales+desc"
+      },
+      {
+        "input": "Give me the worse 5 products in terms of top sales",
+        "output": "fields=order_items.total_sales,products.name&sorts=order_items.total_sales&limit=5&vis=%7B%7D&filter_config=%7B%7D&origin=share-expanded"
+      },
+      {
+        "input": "in the last 6 months, i need to know which gender and city did best in terms of sales",
+        "output": "fields=order_items.total_sales,users.gender,users.city&f[order_items.created_date]=6+months&sorts=order_items.total_sales+desc+0"
+      },
+      {
+        "input": "What are top 10 distribution center with the average monthly orders in the past 6 months",
+        "output": "fields=order_items.total_sales,products.brand,distribution_centers.name,orders.count&f[order_items.created_date]=6+months&sorts=order_items.total_sales+desc+0,orders.count+desc+0&limit=10"
+      },
+      {
+        "input": "List the orders this week that have sales between $80 and $120 and the names of those people",
+        "output": "fields=order_items.order_id,users.first_and_last_name&f[order_items.total_sales]=%5B80%2C120%5D&sorts=order_items.order_id"
+      }
+    ],
+    "retail_data_sr:shoe_store": [
+      {
+        "input": "What were the total sales by department and pivot on store",
+        "output": "fields=shoe_store.total_extended_retail,shoe_store.department_name,shoe_store.store&pivots=shoe_store.store&sorts=shoe_store.store,shoe_store.total_extended_retail+desc+0"
+      },
+      {
+        "input": "What were the total sales for womens boots in the last 6 months",
+        "output": "fields=shoe_store.total_extended_retail&f[shoe_store.department_name]=Womens+Shoes&f[shoe_store.class]=BOOT&f[shoe_store.new_trans_date_date]=6+months"
+      },
+      {
+        "input": "What are the count of orders by vendor for local customers",
+        "output": "fields=shoe_store.count_tickets,shoe_store.vendor&f[shoe_store.is_local]=Local&sorts=shoe_store.count_tickets+desc+0"
+      },
+      {
+        "input": "Who were the top 10 vendors based on the lowest average discount in the last year",
+        "output": "fields=shoe_store.avg_discount,shoe_store.vendor&f[shoe_store.new_trans_date_year]=1+years&sorts=shoe_store.avg_discount+desc&limit=10"
+      }
+    ]
+  },
+  "exploreRefinementExamples": {
+    "ecommerce_order_items:order_items": [
+      {
+        "input": [
+          "make a chart of sales by region",
+          "make it a an area chart",
+          "make it a table"
+        ],
+        "output": "make a chart of sales by region make it a table"
+      },
+      {
+        "input": [
+          "show me sales by region",
+          "by product"
+        ],
+        "output": "show me sales by region and product"
+      }
+    ],
+    "retail_data_sr:shoe_store": [
+      {
+        "input": [
+          "make a chart of sales by region",
+          "make it a an area chart",
+          "make it a table"
+        ],
+        "output": "make a chart of sales by region make it a table"
+      },
+      {
+        "input": [
+          "show me sales by region",
+          "by product"
+        ],
+        "output": "show me sales by region and product"
+      }
+    ]
+  },
+  "exploreSamples": {
+    "ecommerce_order_items:order_items": [],
+    "retail_data_sr:shoe_store": []
+  }
+}

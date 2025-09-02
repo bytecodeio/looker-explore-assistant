@@ -89,14 +89,58 @@ Return only a JSON array of extracted values, no explanation:"""
                     logger.info(f"🧠 LLM extracted entities: {filtered_entities}")
                     return filtered_entities[:5]  # Limit to 5 entities
                 else:
-                    logger.warning(f"LLM response wasn't a valid array. Parsed: {parsed_response}")
-                    return []
+                    logger.warning(f"LLM response wasn't a valid array. Parsed: {parsed_response}. Falling back to regex.")
+                    return self._extract_entities_regex_fallback(query)
             
-            return []
+            logger.warning("No response from LLM. Falling back to regex.")
+            return self._extract_entities_regex_fallback(query)
             
         except Exception as e:
             logger.error(f"LLM entity extraction failed: {e}")
-            return []
+            return self._extract_entities_regex_fallback(query)
+    
+    def _extract_entities_regex_fallback(self, query: str) -> List[str]:
+        """
+        Fallback regex-based entity extraction for when LLM extraction fails
+        
+        Extracts patterns like:
+        - Product codes/SKUs (alphanumeric strings 8+ chars)
+        - Quoted strings
+        - Numbers that might be years, IDs, etc.
+        - Capitalized words that might be proper nouns
+        """
+        entities = []
+        
+        # Pattern 1: Long alphanumeric strings (likely SKUs, product codes)
+        sku_pattern = r'\b[A-Z0-9]{8,}\b'
+        sku_matches = re.findall(sku_pattern, query, re.IGNORECASE)
+        entities.extend(sku_matches)
+        
+        # Pattern 2: Quoted strings
+        quoted_pattern = r'["\']([^"\']+)["\']'
+        quoted_matches = re.findall(quoted_pattern, query)
+        entities.extend(quoted_matches)
+        
+        # Pattern 3: Numbers that could be years, IDs, etc.
+        number_pattern = r'\b(19|20)\d{2}\b|\b\d{4,}\b'
+        number_matches = re.findall(number_pattern, query)
+        # Flatten the tuples from the alternation
+        flat_numbers = [match if isinstance(match, str) else match[0] for match in number_matches]
+        entities.extend(flat_numbers)
+        
+        # Pattern 4: Capitalized words (proper nouns, brands, etc.)
+        proper_noun_pattern = r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b'
+        proper_nouns = re.findall(proper_noun_pattern, query)
+        # Filter out common words
+        common_words = {'Show', 'Tell', 'Get', 'Find', 'What', 'Where', 'When', 'How', 'Why', 'The', 'This', 'That'}
+        filtered_nouns = [noun for noun in proper_nouns if noun not in common_words]
+        entities.extend(filtered_nouns)
+        
+        # Remove duplicates and empty values
+        unique_entities = list(set([e.strip() for e in entities if e and e.strip()]))
+        
+        logger.info(f"🔧 Regex fallback extracted entities: {unique_entities}")
+        return unique_entities[:5]  # Limit to 5 entities
     
     
     async def enhance_query_with_vector_search(self, query: str, call_vertex_ai_func: Callable) -> Tuple[str, str, Dict[str, List]]:

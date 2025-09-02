@@ -1,0 +1,75 @@
+{
+  "suite_id": "custom_test_suite",
+  "name": "Custom Integration Test Suite",
+  "description": "Example configuration for custom test suite",
+  "base_url": "https://ea-demo-backend-63299712962.us-central1.run.app",
+  "parallel_execution": false,
+  "max_workers": 4,
+  "continue_on_failure": true,
+  
+  "auth": {
+    "bearer_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjE0OTljMTU0Y2NjOGEyNWUyNGQ4ZGU4YjFhOWY4NDVhZWZiNmYzY2EiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJhenAiOiIzMjU1NTk0MDU1OS5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbSIsImF1ZCI6IjMyNTU1OTQwNTU5LmFwcHMuZ29vZ2xldXNlcmNvbnRlbnQuY29tIiwic3ViIjoiMTEzMzU1MjQ0NTIyNzM5MTM0NTY3IiwiaGQiOiJieXRlY29kZS5pbyIsImVtYWlsIjoiY29saW4ucm95LmVocmlAYnl0ZWNvZGUuaW8iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiYXRfaGFzaCI6ImpBckZTb3Q2NE5CY3o1d20tcHBMTlEiLCJpYXQiOjE3NTY0OTY3NTIsImV4cCI6MTc1NjUwMDM1Mn0.G6QFbFS1hbmeYqoEky21yQCry3vSzm9Ni_1bWOMOeqxl5kiF2lTWmWVFko66_zZG1lsaILVX03d8XgR-vrrqB81KTGV5LuevZ4O76cEe_jIacu9_87wawrJ1iAmy5-ccqYEr2GkWM_3yxTyJW-txV5DUQ4vaCzo0qdipiuGBSAcfXhLnLMN4usDw0S7vYd4MZcNAHb38BuHQpPtoVHZT45qNv-6-XJe-dExgrJCC6Ug50HADCDMJtpPLg16Jjp-QIkjIGh7RPCl4cZ48MsXAtiS4xYll0BVQs9fMF2ePlZ0YHpqB_gjeVkr7y_VxYb-xLyAJKPMm-28xJaQFyhAWaQ",
+    "headers": {
+      "User-Agent": "CustomTestSuite/1.0"
+    }
+  },
+  
+  "test_cases": [
+    {
+      "test_id": "product_sku_validation",
+      "name": "Product SKU Filter Validation",
+      "description": "Verify that product SKU queries generate proper filters",
+      "priority": "critical",
+      "tags": ["product_sku", "vector_search"],
+      
+      "request": {
+        "endpoint": "/api/v1/query",
+        "method": "POST",
+        "data": {
+          "query": "tell me about sales 0006AABE0BA47A35C0B0BF6596F85159",
+          "restricted_explore_keys": ["sales_demo_the_look:order_items"],
+          "debug": true
+        },
+        "timeout": 30.0
+      },
+      
+      "validations": [
+        {
+          "field_path": "success",
+          "operator": "equals",
+          "expected_value": true,
+          "description": "Response should be successful"
+        },
+        {
+          "field_path": "data.explore_key",
+          "operator": "equals", 
+          "expected_value": "sales_demo_the_look:order_items",
+          "description": "Should select correct explore"
+        },
+        {
+          "field_path": "data.parameters.filters.products.sku",
+          "operator": "equals",
+          "expected_value": "0006AABE0BA47A35C0B0BF6596F85159", 
+          "description": "Should filter by the specific product SKU"
+        },
+        {
+          "field_path": "debug_info",
+          "operator": "has_key",
+          "description": "Should include debug information"
+        },
+        {
+          "field_path": "data.generation_metadata.vector_search_used",
+          "operator": "length_greater_than",
+          "expected_value": 0,
+          "description": "Should have used vector search"
+        }
+      ]
+    }
+  ],
+  
+  "reporting": {
+    "save_debug_logs": true,
+    "include_response_data": true,
+    "verbose_validation_output": true
+  }
+}

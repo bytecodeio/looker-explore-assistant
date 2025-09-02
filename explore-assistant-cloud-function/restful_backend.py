@@ -196,28 +196,98 @@ def _register_blueprints(app: Flask) -> None:
         if request.method == 'OPTIONS':
             return _handle_cors()
         
+        import time
+        start_time = time.time()
+        debug_session_id = None
+        
         try:
             # Extract request data
             data = request.get_json(force=True)
             if not data:
                 raise RestfulBackendError("No JSON data provided", 400)
             
+            # Check for debug mode
+            debug_mode = data.get('debug', False) or request.args.get('debug', '').lower() == 'true'
+            
+            # Initialize debug logging if requested
+            if debug_mode:
+                from core.debug_logger import debug_logger
+                debug_logger.enable_debug_mode()
+                debug_session_id = debug_logger.start_debug_session(data)
+                debug_logger.log_processing_step("request_received", {
+                    "query": data.get('query', data.get('prompt', ''))[:100],
+                    "explore_key": data.get('explore_key'),
+                    "debug_mode": True
+                })
+            
             # Extract user info from auth header
             auth_header = request.headers.get('Authorization', '')
             user_info = extract_user_info_from_token(auth_header)
             
             # Process the query
-            result = _process_query_request(data, auth_header, user_info)
+            result = _process_query_request(data, auth_header, user_info, debug_mode=debug_mode)
             
-            return jsonify({
+            # Calculate processing time
+            total_time_ms = (time.time() - start_time) * 1000
+            
+            # Build response
+            response_data = {
                 "success": True,
                 "data": result,
-                "timestamp": datetime.utcnow().isoformat()
-            })
+                "timestamp": datetime.utcnow().isoformat(),
+                "processing_time_ms": round(total_time_ms, 2)
+            }
+            
+            # Add debug information if in debug mode
+            if debug_mode and debug_session_id:
+                from core.debug_logger import debug_logger
+                # End debug session
+                debug_logger.end_debug_session(
+                    response_data=response_data,
+                    success=True,
+                    total_processing_time_ms=total_time_ms
+                )
+                
+                # Add debug information to response
+                response_data["debug_info"] = {
+                    "session_id": debug_session_id,
+                    "debug_log_url": f"/api/v1/debug/logs/{debug_session_id}",
+                    "llm_interactions_count": len(debug_logger.current_session.llm_interactions) if debug_logger.current_session else 0,
+                    "processing_steps_count": len(debug_logger.current_session.processing_steps) if debug_logger.current_session else 0,
+                    "verbose_details": {
+                        "total_processing_time_ms": total_time_ms,
+                        "request_size_bytes": len(json.dumps(data)),
+                        "response_size_bytes": len(json.dumps(response_data))
+                    }
+                }
+                
+                debug_logger.disable_debug_mode()
+            
+            return jsonify(response_data)
             
         except RestfulBackendError as e:
+            # Handle debug mode for errors
+            if debug_mode and debug_session_id:
+                from core.debug_logger import debug_logger
+                debug_logger.end_debug_session(
+                    response_data={"error": e.message},
+                    success=False,
+                    error=e.message,
+                    total_processing_time_ms=(time.time() - start_time) * 1000
+                )
+                debug_logger.disable_debug_mode()
             return _handle_api_error(e)
         except Exception as e:
+            # Handle debug mode for unexpected errors
+            if debug_mode and debug_session_id:
+                from core.debug_logger import debug_logger
+                debug_logger.end_debug_session(
+                    response_data={"error": str(e)},
+                    success=False,
+                    error=str(e),
+                    total_processing_time_ms=(time.time() - start_time) * 1000
+                )
+                debug_logger.disable_debug_mode()
             logger.error(f"Unexpected error in query endpoint: {traceback.format_exc()}")
             return _handle_api_error(RestfulBackendError(f"Internal server error: {str(e)}", 500))
     
@@ -646,6 +716,9 @@ def _register_blueprints(app: Flask) -> None:
     
     # Add admin endpoints
     _register_admin_endpoints(app)
+    
+    # Add debug endpoints
+    _register_debug_endpoints(app)
     
     # Add legacy endpoints for compatibility
     _register_legacy_endpoints(app)
@@ -1206,6 +1279,184 @@ def _register_admin_endpoints(app: Flask) -> None:
     app.register_blueprint(admin_bp)
 
 
+def _register_debug_endpoints(app: Flask) -> None:
+    """Register debug endpoints for LLM interaction logging and debug session retrieval"""
+    
+    debug_bp = Blueprint('debug', __name__, url_prefix='/api/v1/debug')
+    
+    @debug_bp.route('/logs/<session_id>', methods=['GET', 'OPTIONS'])
+    def get_debug_log(session_id: str):
+        """Retrieve a debug log by session ID"""
+        if request.method == 'OPTIONS':
+            return _handle_cors()
+        
+        try:
+            from core.debug_logger import debug_logger
+            
+            # Validate session ID format
+            if not session_id.startswith('debug_'):
+                raise RestfulBackendError("Invalid debug session ID format", 400)
+            
+            # Retrieve the debug session
+            debug_session = debug_logger.get_debug_session(session_id)
+            
+            if not debug_session:
+                raise RestfulBackendError("Debug session not found", 404)
+            
+            # Add some metadata for the response
+            response_data = {
+                "success": True,
+                "debug_session": debug_session,
+                "session_id": session_id,
+                "retrieved_at": datetime.utcnow().isoformat(),
+                "summary": {
+                    "total_llm_interactions": len(debug_session.get('llm_interactions', [])),
+                    "total_processing_steps": len(debug_session.get('processing_steps', [])),
+                    "total_processing_time_ms": debug_session.get('total_processing_time_ms', 0),
+                    "request_was_successful": debug_session.get('success', False)
+                }
+            }
+            
+            return jsonify(response_data)
+            
+        except RestfulBackendError as e:
+            return _handle_api_error(e)
+        except Exception as e:
+            logger.error(f"Debug log retrieval error: {traceback.format_exc()}")
+            return _handle_api_error(RestfulBackendError(f"Failed to retrieve debug log: {str(e)}", 500))
+    
+    @debug_bp.route('/stats', methods=['GET', 'OPTIONS'])
+    def get_debug_stats():
+        """Get debug logging system statistics"""
+        if request.method == 'OPTIONS':
+            return _handle_cors()
+        
+        try:
+            from core.debug_logger import debug_logger
+            
+            stats = debug_logger.get_debug_stats()
+            
+            return jsonify({
+                "success": True,
+                "data": stats,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+            
+        except Exception as e:
+            logger.error(f"Debug stats error: {traceback.format_exc()}")
+            return _handle_api_error(RestfulBackendError(f"Failed to get debug stats: {str(e)}", 500))
+    
+    @debug_bp.route('/cleanup', methods=['POST', 'OPTIONS'])
+    def cleanup_debug_logs():
+        """Clean up old debug logs"""
+        if request.method == 'OPTIONS':
+            return _handle_cors()
+        
+        try:
+            data = request.get_json() or {}
+            max_age_hours = data.get('max_age_hours', 24)
+            
+            # Validate max_age_hours
+            if not isinstance(max_age_hours, (int, float)) or max_age_hours <= 0:
+                raise RestfulBackendError("max_age_hours must be a positive number", 400)
+            
+            from core.debug_logger import debug_logger
+            
+            deleted_count = debug_logger.cleanup_old_logs(max_age_hours=max_age_hours)
+            
+            return jsonify({
+                "success": True,
+                "data": {
+                    "deleted_files": deleted_count,
+                    "max_age_hours": max_age_hours,
+                    "cleanup_completed_at": datetime.utcnow().isoformat()
+                },
+                "message": f"Cleaned up {deleted_count} debug log files older than {max_age_hours} hours"
+            })
+            
+        except RestfulBackendError as e:
+            return _handle_api_error(e)
+        except Exception as e:
+            logger.error(f"Debug cleanup error: {traceback.format_exc()}")
+            return _handle_api_error(RestfulBackendError(f"Failed to cleanup debug logs: {str(e)}", 500))
+    
+    @debug_bp.route('/test', methods=['POST', 'OPTIONS'])
+    def test_debug_mode():
+        """Test endpoint to verify debug logging functionality"""
+        if request.method == 'OPTIONS':
+            return _handle_cors()
+        
+        try:
+            data = request.get_json() or {}
+            test_query = data.get('test_query', 'Test debug query for system verification')
+            
+            # Force debug mode for this test
+            test_data = {
+                'query': test_query,
+                'debug': True,
+                'explore_key': 'test:debug_explore'
+            }
+            
+            # Extract user info from auth header
+            auth_header = request.headers.get('Authorization', '')
+            user_info = extract_user_info_from_token(auth_header)
+            
+            # Initialize debug session manually
+            from core.debug_logger import debug_logger
+            debug_logger.enable_debug_mode()
+            session_id = debug_logger.start_debug_session(test_data)
+            
+            # Log some test steps
+            debug_logger.log_processing_step("test_step_1", {
+                "action": "debug_test_initiated",
+                "query": test_query
+            })
+            
+            # Simulate an LLM interaction
+            debug_logger.log_llm_interaction(
+                context="debug_test",
+                request_data={"test_request": "This is a test LLM request"},
+                response_data={"test_response": "This is a test LLM response"},
+                processing_time_ms=100.0,
+                token_usage={"prompt_tokens": 50, "total_tokens": 75}
+            )
+            
+            debug_logger.log_processing_step("test_step_2", {
+                "action": "debug_test_completed",
+                "session_id": session_id
+            })
+            
+            # End debug session
+            response_data = {
+                "test_result": "Debug logging test completed successfully",
+                "session_id": session_id
+            }
+            
+            debug_logger.end_debug_session(
+                response_data=response_data,
+                success=True,
+                total_processing_time_ms=150.0
+            )
+            
+            debug_logger.disable_debug_mode()
+            
+            return jsonify({
+                "success": True,
+                "data": {
+                    "test_completed": True,
+                    "debug_session_id": session_id,
+                    "debug_log_url": f"/api/v1/debug/logs/{session_id}",
+                    "test_query": test_query
+                },
+                "message": "Debug logging test completed successfully"
+            })
+            
+        except Exception as e:
+            logger.error(f"Debug test error: {traceback.format_exc()}")
+            return _handle_api_error(RestfulBackendError(f"Debug test failed: {str(e)}", 500))
+    
+    app.register_blueprint(debug_bp)
+
 
 def _register_legacy_endpoints(app: Flask) -> None:
     """Register legacy endpoints for backward compatibility"""
@@ -1226,8 +1477,15 @@ def _register_legacy_endpoints(app: Flask) -> None:
     
 
 
-def _process_query_request(data: Dict[str, Any], auth_header: str, user_info: Dict[str, Any]) -> Dict[str, Any]:
+def _process_query_request(data: Dict[str, Any], auth_header: str, user_info: Dict[str, Any], debug_mode: bool = False) -> Dict[str, Any]:
     """Process a query request using the new modular architecture"""
+    import time
+    
+    # Initialize debug logger if in debug mode
+    debug_logger = None
+    if debug_mode:
+        from core.debug_logger import debug_logger as dl
+        debug_logger = dl
     
     # Extract query parameters
     query_text = data.get('query', data.get('prompt', ''))
@@ -1237,55 +1495,126 @@ def _process_query_request(data: Dict[str, Any], auth_header: str, user_info: Di
     conversation_context = data.get('conversation_context', '')
     explore_key = data.get('explore_key')
 
-    # Extract additional context
-    restricted_explore_keys = data.get('restricted_explore_keys')
-    golden_queries = data.get('golden_queries')
-    semantic_models = data.get('semantic_models')
+    # Extract additional context with safe defaults
+    restricted_explore_keys = data.get('restricted_explore_keys') or []
+    golden_queries = data.get('golden_queries') or {}
+    semantic_models = data.get('semantic_models') or {}
 
     logger.info(f"🚀 Processing query: {query_text[:100]}...")
     logger.info(f"restricted_explore_keys from request: {restricted_explore_keys}")
     logger.info(f"golden_queries from request: {type(golden_queries)}")
     logger.info(f"semantic_models from request: {type(semantic_models)}")
 
+    if debug_logger:
+        debug_logger.log_processing_step("query_extraction", {
+            "query_text": query_text,
+            "conversation_context_present": bool(conversation_context),
+            "explore_key_provided": bool(explore_key),
+            "restricted_explores_count": len(restricted_explore_keys) if restricted_explore_keys else 0,
+            "golden_queries_type": type(golden_queries).__name__,
+            "semantic_models_type": type(semantic_models).__name__
+        })
+
     try:
         # Step 1: Determine explore if not provided
         if not explore_key:
+            step_start = time.time()
+            
+            if debug_logger:
+                debug_logger.log_processing_step("explore_determination_start", {
+                    "available_explores": restricted_explore_keys or [],
+                    "method": "ai_selection"
+                })
+            
             explore_key = determine_explore_from_prompt(
                 auth_header=auth_header,
                 prompt=query_text,
                 golden_queries=golden_queries,
                 conversation_context=conversation_context,
                 restricted_explore_keys=restricted_explore_keys,
-                semantic_models=semantic_models
+                semantic_models=semantic_models,
+                debug_mode=debug_mode
             )
+            
+            step_time = (time.time() - step_start) * 1000
+            
+            if debug_logger:
+                debug_logger.log_processing_step("explore_determination_complete", {
+                    "selected_explore": explore_key,
+                    "method": "ai_selection"
+                }, step_time)
 
             if not explore_key:
                 raise RestfulBackendError("Could not determine appropriate explore", 400)
 
         # Step 2: Generate parameters using new modular system
-        # Optionally, you may want to use the request's golden_queries/semantic_models here as well
+        step_start = time.time()
+        
+        if debug_logger:
+            debug_logger.log_processing_step("parameter_generation_start", {
+                "target_explore": explore_key,
+                "vector_search_enabled": True,
+                "golden_queries_available": bool(golden_queries)
+            })
+        
         result = generate_explore_params_from_query(
             auth_header=auth_header,
             query=query_text,
             explore_key=explore_key,
             golden_queries=golden_queries,
             semantic_models=semantic_models,
-            current_explore={}
+            conversation_context=conversation_context,
+            current_explore={},
+            debug_mode=debug_mode
         )
+        
+        step_time = (time.time() - step_start) * 1000
+        
+        if debug_logger:
+            debug_logger.log_processing_step("parameter_generation_complete", {
+                "success": bool(result),
+                "generation_method": result.get('generation_method') if result else None,
+                "vector_search_used_count": len(result.get('vector_search_used', [])) if result else 0
+            }, step_time)
 
         if not result:
             raise RestfulBackendError("Failed to generate query parameters", 500)
 
-        # Step 3: Validate and format parameters
-        validated_params = validate_explore_parameters(
-            result.get('explore_params', {}),
-            explore_key
-        )
+        # Step 3: Extract validated parameters (already processed by generator)
+        step_start = time.time()
+        
+        # Defensive extraction - ensure we get a valid dictionary
+        explore_params = result.get('explore_params')
+        if not explore_params or not isinstance(explore_params, dict):
+            logger.error(f"❌ Invalid explore_params from generator: {type(explore_params)}")
+            raise RestfulBackendError("Invalid parameters returned from parameter generator", 500)
+        
+        validated_params = explore_params
+        
+        step_time = (time.time() - step_start) * 1000
+        
+        if debug_logger:
+            debug_logger.log_processing_step("parameter_validation_complete", {
+                "field_count": len(validated_params.get('fields', [])),
+                "filter_count": len(validated_params.get('filters', {})),
+                "sort_count": len(validated_params.get('sorts', [])),
+                "limit": validated_params.get('limit')
+            }, step_time)
 
         # Step 4: Store query for learning (Olympic system)
+        step_start = time.time()
+        
         _store_query_for_learning(query_text, explore_key, validated_params, user_info)
+        
+        step_time = (time.time() - step_start) * 1000
+        
+        if debug_logger:
+            debug_logger.log_processing_step("olympic_storage_complete", {
+                "stored_in_olympic_system": True
+            }, step_time)
 
-        return {
+        # Build comprehensive response
+        response_data = {
             "explore_key": explore_key,
             "parameters": validated_params,
             "generation_metadata": {
@@ -1299,6 +1628,32 @@ def _process_query_request(data: Dict[str, Any], auth_header: str, user_info: Di
                 "user_id": user_info.get('user_id')
             }
         }
+        
+        # Add verbose debug information if in debug mode
+        if debug_mode:
+            response_data["debug_details"] = {
+                "processing_pipeline": [
+                    "query_extraction",
+                    "explore_determination" if not data.get('explore_key') else "explore_provided",
+                    "parameter_generation_with_vector_search",
+                    "parameter_validation",
+                    "olympic_system_storage"
+                ],
+                "context_analysis": {
+                    "query_length": len(query_text),
+                    "conversation_context_length": len(conversation_context),
+                    "restricted_explores_applied": bool(restricted_explore_keys),
+                    "golden_queries_available": bool(golden_queries),
+                    "semantic_models_available": bool(semantic_models)
+                },
+                "generation_details": {
+                    "vector_search_hits": len(result.get('vector_search_used', [])),
+                    "field_context_available": result.get('field_context_available', False),
+                    "golden_examples_used": result.get('golden_examples_used', 0)
+                }
+            }
+        
+        return response_data
 
     except ParameterGenerationError as e:
         raise RestfulBackendError(f"Parameter generation failed: {e.message}", 400, {"explore_key": e.explore_key})
