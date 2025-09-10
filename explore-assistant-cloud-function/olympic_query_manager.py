@@ -200,7 +200,8 @@ class OlympicQueryManager:
             link=link,
             rank=QueryRank.SILVER,
             created_at=datetime.utcnow(),
-            user_id=user_id,
+            user_email=user_id,  # Store user_id in user_email field since user_id column might not exist
+            user_id=None,  # Explicitly set to None to avoid inclusion in BQ insert
             feedback_type=feedback_type,
             conversation_history=conversation_history
         )
@@ -210,10 +211,10 @@ class OlympicQueryManager:
         return query_id
 
     def add_feedback_query(self, explore_id: str, original_prompt: str, generated_params: dict,
-                          share_url: str, feedback_type: str, user_email: str, 
-                          conversation_context: str = None, user_comment: str = None, 
-                          suggested_improvements: str = None, issues: list = None, 
-                          query_id: str = None) -> str:
+                          share_url: str, feedback_type: str, user_id: str, 
+                          conversation_context: Optional[str] = None, user_comment: Optional[str] = None, 
+                          suggested_improvements: Optional[str] = None, issues: Optional[list] = None, 
+                          query_id: Optional[str] = None) -> str:
         """
         Add a comprehensive feedback query combining conversation history with user feedback.
         Uses SILVER rank for positive feedback, DISQUALIFIED rank for negative feedback.
@@ -224,7 +225,7 @@ class OlympicQueryManager:
             generated_params: The AI-generated query parameters
             share_url: Link to the query
             feedback_type: 'positive', 'negative', 'refinement', 'alternative'
-            user_email: Email of user who provided feedback
+            user_id: User ID who provided feedback (temporarily stored in user_email column)
             conversation_context: Previous conversation history context
             user_comment: User's additional comments
             suggested_improvements: Specific improvement suggestions
@@ -259,6 +260,7 @@ class OlympicQueryManager:
             }
         }
         
+        # Use user_email field instead of user_id to maintain compatibility with existing schema
         query = OlympicQuery(
             id=feedback_id,
             explore_id=explore_id,
@@ -267,7 +269,7 @@ class OlympicQueryManager:
             link=share_url,
             rank=rank,
             created_at=datetime.utcnow(),
-            user_email=user_email,
+            user_email=user_id,  # Store user_id in user_email field for now
             feedback_type=feedback_type,
             conversation_history=json.dumps(combined_history)
         )
@@ -278,7 +280,7 @@ class OlympicQueryManager:
     
     def add_disqualified_query(self, explore_id: str, input_text: str, output: str,
                               link: str, user_id: str, feedback_type: str,
-                              conversation_history: str = None) -> str:
+                              conversation_history: Optional[str] = None) -> str:
         """Add a disqualified query (negative feedback)"""
         query_id = str(uuid.uuid4())
         
@@ -290,7 +292,8 @@ class OlympicQueryManager:
             link=link,
             rank=QueryRank.DISQUALIFIED,
             created_at=datetime.utcnow(),
-            user_id=user_id,
+            user_email=user_id,  # Store user_id in user_email field since user_id column might not exist
+            user_id=None,  # Explicitly set to None to avoid inclusion in BQ insert
             feedback_type=feedback_type,
             conversation_history=conversation_history
         )
@@ -334,7 +337,7 @@ class OlympicQueryManager:
             logger.error(f"Failed to promote query {query_id}: {e}")
             return False
     
-    def get_queries_by_rank(self, rank: QueryRank, explore_id: str = None, 
+    def get_queries_by_rank(self, rank: QueryRank, explore_id: Optional[str] = None, 
                            limit: int = 100) -> List[Dict[str, Any]]:
         """Get queries filtered by rank and optionally by explore"""
         query = f"""
@@ -363,7 +366,7 @@ class OlympicQueryManager:
         
         return [dict(row) for row in results]
     
-    def get_gold_queries_for_training(self, explore_id: str = None) -> List[Dict[str, Any]]:
+    def get_gold_queries_for_training(self, explore_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get gold queries suitable for LLM training"""
         return self.get_queries_by_rank(QueryRank.GOLD, explore_id)
     

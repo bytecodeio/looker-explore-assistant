@@ -480,14 +480,15 @@ def _register_blueprints(app: Flask) -> None:
                 raise RestfulBackendError("query_id, user_input, and response are required", 400)
             
             # Store positive feedback in Olympic system
-            # Use user_email field which already exists in table
+            # Use user_id parameter as per standardized implementation
+            # But pass user_email value until schema migration is complete
             app.olympic_manager.add_feedback_query(
                 explore_id=explore_key or "unknown",
                 original_prompt=user_input,
                 generated_params=json.loads(response) if isinstance(response, str) else response,
                 share_url="",
                 feedback_type="positive",
-                user_email=user_email,  # This will be mapped to user_email internally if needed
+                user_id=user_email,  # Pass email as user_id which will be stored in user_email field
                 user_comment=feedback_notes
             )
             
@@ -531,13 +532,15 @@ def _register_blueprints(app: Flask) -> None:
                 feedback_notes += f"\nSuggestions: {improvement_suggestions}"
             
             # Store negative feedback in Olympic system
+            # Use user_id parameter as per standardized implementation
+            # But pass user_email value until schema migration is complete
             app.olympic_manager.add_feedback_query(
                 explore_id=explore_key or "unknown",
                 original_prompt=user_input,
                 generated_params=json.loads(response) if isinstance(response, str) else response,
                 share_url="",
                 feedback_type="negative", 
-                user_email=user_email,
+                user_id=user_email,  # Pass email as user_id which will be stored in user_email field
                 user_comment=feedback_notes
             )
             
@@ -608,13 +611,15 @@ def _register_blueprints(app: Flask) -> None:
                     feedback_notes = f"Suggestions: {suggested_improvements}"
             
             # Store feedback in Olympic system
+            # Use user_id parameter as per standardized implementation
+            # But pass user_email value until schema migration is complete
             app.olympic_manager.add_feedback_query(
                 explore_id=explore_id,
                 original_prompt=original_prompt,
                 generated_params=params_dict,
                 share_url=share_url,
                 feedback_type=feedback_type,
-                user_email=user_email,
+                user_id=user_email,  # Pass email as user_id which will be stored in user_email field
                 user_comment=feedback_notes,
                 query_id=query_id
             )
@@ -1692,20 +1697,20 @@ def _store_query_for_learning(query: str, explore_key: str, params: Dict, user_i
     try:
         # Convert parameters to JSON string for storage
         output_str = json.dumps(params) if params else "{}"
-        
-        app.olympic_manager.add_bronze_query(
+
+        # Use user_email for bronze queries, user_id for feedback (handled elsewhere)
+        user_email = user_info.get('email', 'unknown')
+        app.olympic_manager.add_bronze_query(  # type: ignore[attr-defined]
             explore_id=explore_key,
             input_text=query,
             output=output_str,
-            link="",  # No link for automatic storage
-            user_email=user_info.get('email', 'unknown'),
+            link="",
+            user_email=user_email,
             query_run_count=1
         )
         logger.info(f"✅ Stored bronze query for learning: {explore_key}")
     except Exception as e:
         logger.warning(f"Failed to store query for learning: {e}")
-
-
 def _handle_cors() -> Response:
     """Handle CORS preflight requests"""
     response = Response()

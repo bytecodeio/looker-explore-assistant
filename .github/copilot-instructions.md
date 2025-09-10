@@ -336,9 +336,9 @@ value_matches = field_value_lookup(
 ## BigQuery Table Architecture (Simplified Management)
 
 ### Three-Tier Query Progression System
-- **Bronze Queries** → **Silver Queries** → **Golden Queries**
-- **Disposable Staging Strategy**: Bronze/Silver tables drop and recreate on schema mismatch
-- **Data Preservation**: Golden table only adds missing columns, never drops data
+**Bronze Queries** → **Silver Queries** → **Golden Queries**
+**Disposable Staging Strategy**: Bronze/Silver tables drop and recreate on schema mismatch
+**Data Preservation**: Golden table only adds missing columns, never drops data
 
 ### Standardized Field Schema
 All tables use consistent field names with `explore_id` (not `explore_key`):
@@ -347,12 +347,18 @@ All tables use consistent field names with `explore_id` (not `explore_key`):
 # Core fields that migrate through all tables
 CORE_FIELDS = ["id", "explore_id", "input", "output", "link", "promoted_by", "promoted_at"]
 
-# Bronze-specific fields (don't migrate)
-BRONZE_FIELDS = ["user_email", "query_run_count"]
+# Bronze-specific fields (do not migrate)
+BRONZE_FIELDS = ["user_email", "query_run_count"]  # Bronze queries use user_email
 
-# Silver-specific fields (don't migrate) 
-SILVER_FIELDS = ["user_id", "feedback_type", "conversation_history"]
+# Silver/Feedback-specific fields (do not migrate)
+SILVER_FIELDS = ["user_id", "feedback_type", "conversation_history"]  # Feedback/positive/negative/refinement always use user_id
 ```
+
+**Important:**
+- For bronze queries, always use `user_email`.
+- For all feedback, silver, disqualified, or refinement queries, always use `user_id` in function signatures and application code.
+- The backend, MCP, and REST API must pass `user_id` for all feedback-related logic for consistency.
+- **Implementation Note**: While the code uses `user_id` in signatures, internally the implementation currently stores this value in the `user_email` field in BigQuery until schema migration is complete.
 
 ### Table Management Functions
 ```python
@@ -536,6 +542,7 @@ const handlePositiveFeedback = () => {
 #### Olympic Query System Schema Mismatches  
 **Problem**: BigQuery tables exist but have outdated schemas missing required fields
 - Error: `no such field: user_id` indicates table schema doesn't match code expectations
+  - **Temporary Solution**: Use the existing `user_email` field to store `user_id` values while maintaining consistent function signatures that use `user_id`
 - `ensure_table_exists()` only creates tables if they don't exist, doesn't update schemas
 
 **Solution**: Add schema validation and recreation logic:

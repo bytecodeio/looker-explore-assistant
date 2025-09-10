@@ -400,24 +400,20 @@ class OlympicMCPIntegration:
         """
         MCP tool to add comprehensive feedback query with conversation history.
         Uses SILVER rank for positive feedback, DISQUALIFIED rank for negative feedback.
-        
+
         Args:
             arguments: Feedback data including explore_id, original_prompt, generated_params,
                       share_url, feedback_type, user_id, conversation_context, user_comment,
                       suggested_improvements, issues, query_id
-        
+
         Returns:
             dict: Addition result
         """
         try:
-            # Log the BigQuery target information
-            logger.info(f"add_feedback_query: Targeting BigQuery table {self.project_id}.{self.dataset_id}.olympic_queries")
-            
             # Validate required arguments
-            required_fields = ['explore_id', 'original_prompt', 'generated_params', 
+            required_fields = ['explore_id', 'original_prompt', 'generated_params',
                               'share_url', 'feedback_type', 'user_id']
             missing_fields = [field for field in required_fields if field not in arguments]
-            
             if missing_fields:
                 return {
                     "tool": "add_feedback_query",
@@ -425,7 +421,7 @@ class OlympicMCPIntegration:
                     "error": f"Missing required fields: {missing_fields}",
                     "result": None
                 }
-            
+
             # Ensure Olympic table exists and has correct schema
             try:
                 self.olympic_manager.ensure_table_exists()
@@ -437,29 +433,30 @@ class OlympicMCPIntegration:
                 logger.error(f"Failed to validate Olympic table schema: {schema_error}")
                 return {
                     "tool": "add_feedback_query",
-                    "status": "error", 
+                    "status": "error",
                     "error": f"Table schema validation failed: {str(schema_error)}",
                     "result": None
                 }
-            
+
             # Add feedback query using Olympic manager
+            # user_id is passed to add_feedback_query which internally stores it in user_email field
             query_id = self.olympic_manager.add_feedback_query(
                 explore_id=arguments['explore_id'],
                 original_prompt=arguments['original_prompt'],
                 generated_params=arguments['generated_params'],
                 share_url=arguments['share_url'],
                 feedback_type=arguments['feedback_type'],
-                user_id=arguments['user_id'],
+                user_id=arguments['user_id'],  # This will be stored in user_email field internally
                 conversation_context=arguments.get('conversation_context'),
                 user_comment=arguments.get('user_comment'),
                 suggested_improvements=arguments.get('suggested_improvements'),
                 issues=arguments.get('issues'),
                 query_id=arguments.get('query_id')
             )
-            
+
             # Determine final rank for response
             rank = "disqualified" if arguments['feedback_type'] == 'negative' else "silver"
-            
+
             return {
                 "tool": "add_feedback_query",
                 "status": "success",
@@ -469,7 +466,7 @@ class OlympicMCPIntegration:
                     "feedback_type": arguments['feedback_type']
                 }
             }
-            
+
         except Exception as e:
             logger.error(f"Add feedback query failed: {str(e)}")
             return {
