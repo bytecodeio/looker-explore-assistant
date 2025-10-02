@@ -1210,7 +1210,6 @@ def _register_admin_endpoints(app: Flask) -> None:
         try:
             data = request.get_json(force=True) or {}
             force_refresh = data.get('force_refresh', False)
-            focus_explore = data.get('focus_explore')
             
             from vector_table_manager import VectorTableManager
             vector_manager = VectorTableManager()
@@ -1237,8 +1236,8 @@ def _register_admin_endpoints(app: Flask) -> None:
                 
                 # Step 2: Create field values table
                 setup_result["steps"].append("Creating field values table from Looker explores...")
-                logger.info(f"Creating field values table (focus_explore: {focus_explore})")
-                table_success = vector_manager.create_field_values_table_from_looker_explores(focus_explore)
+                logger.info("Creating field values table from all Looker explores")
+                table_success = vector_manager.create_field_values_table_from_looker_explores()
                 if table_success:
                     setup_result["steps"].append("✅ Field values table created successfully")
                 else:

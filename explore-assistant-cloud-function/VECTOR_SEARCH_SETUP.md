@@ -280,7 +280,7 @@ The vector search system is automatically integrated into the query generation p
 ### Indexing Performance
 - Initial setup may take 10-30 minutes depending on Looker explore size
 - Embedding generation is the most time-intensive step
-- Consider using `focus_explore` parameter for faster testing
+- Processing runs on all explores with 'index' sets automatically
 
 ### Query Performance
 - Vector searches typically complete in <2 seconds
