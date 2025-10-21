@@ -96,9 +96,6 @@ const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
   const [issues, setIssues] = useState<string[]>([])
   const [newIssue, setNewIssue] = useState('')
   const [submitSuccess, setSubmitSuccess] = useState<boolean | null>(null)
-
-  const { settings } = useSelector((state: RootState) => state.assistant)
-  // Use a system identifier since userEmail is not available in OAuth state
   const userId = 'system_user'
   
   const { 

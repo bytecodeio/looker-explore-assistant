@@ -1,8 +1,6 @@
 import { useCallback, useContext } from 'react'
-import { useSelector } from 'react-redux'
-import { RootState } from '../store'
-import { AssistantState } from '../slices/assistantSlice'
 import { ExtensionContext } from '@looker/extension-sdk-react'
+import { appConfig } from '../config'
 
 interface PromotionResult {
   new_query_id: string
@@ -24,11 +22,10 @@ interface HistoryResult {
 
 export const useQueryPromotion = () => {
   const { extensionSDK } = useContext(ExtensionContext)
-  const { settings } = useSelector((state: RootState) => state.assistant as AssistantState)
 
-  // Cloud Run service settings
-  const CLOUD_RUN_URL = settings['cloud_run_service_url']?.value as string || ''
-  const identityToken = settings['identity_token']?.value as string || ''
+  // Cloud Run service settings from configuration
+  const CLOUD_RUN_URL = appConfig.cloudRunServiceUrl
+  const identityToken = '' // TODO: Implement proper identity token retrieval
 
   const getQueriesForPromotion = useCallback(async (
     tableName: 'bronze' | 'silver',

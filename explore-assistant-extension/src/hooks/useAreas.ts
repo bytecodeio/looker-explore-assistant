@@ -8,18 +8,19 @@ import {
   AssistantState,
   Area
 } from '../slices/assistantSlice'
+import { appConfig } from '../config'
 
 export const useAreas = () => {
   const dispatch = useDispatch()
-  const { isAreasLoaded, settings } = useSelector((state: RootState) => state.assistant as AssistantState)
+  const { isAreasLoaded } = useSelector((state: RootState) => state.assistant as AssistantState)
   
   const { lookerHostData } = useContext(ExtensionContext)
 
   const runAreasQuery = async () => {
     try {
-      // Get Cloud Run settings
-      const CLOUD_RUN_URL = settings?.cloud_run_service_url?.value as string || ''
-      const identityToken = settings?.identity_token?.value as string || ''
+      // Get Cloud Run settings from configuration
+      const CLOUD_RUN_URL = appConfig.cloudRunServiceUrl
+      const identityToken = '' // TODO: Implement proper identity token retrieval
       
       if (!CLOUD_RUN_URL) {
         console.error('Cloud Run URL not configured')
@@ -180,7 +181,7 @@ export const useAreas = () => {
       clearTimeout(timeoutId)
       isFetching.current = false
     }
-  }, [settings?.cloud_run_service_url?.value, settings?.identity_token?.value, dispatch])
+  }, [appConfig.cloudRunServiceUrl, dispatch])
 
   return {
     getAreas,

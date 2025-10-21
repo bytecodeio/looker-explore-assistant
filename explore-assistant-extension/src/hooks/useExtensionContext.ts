@@ -4,7 +4,6 @@ import { ExtensionContext } from '@looker/extension-sdk-react'
 import { RootState } from '../store'
 import { 
   AssistantState, 
-  setSetting,
   setUserAttributesLoaded
 } from '../slices/assistantSlice'
 
@@ -12,10 +11,10 @@ import {
 const CONTEXT_DEBUG = true
 
 export const useExtensionContext = () => {
-  const { extensionSDK, core40SDK } = useContext(ExtensionContext)
+  const { extensionSDK } = useContext(ExtensionContext)
   const dispatch = useDispatch()
   
-  const { settings, userAttributesLoaded } = useSelector(
+  const { userAttributesLoaded } = useSelector(
     (state: RootState) => state.assistant as AssistantState,
   )
   
@@ -41,28 +40,10 @@ export const useExtensionContext = () => {
       const contextData = await extensionSDK.getContextData()
       CONTEXT_DEBUG && console.log('Extension context data:', contextData)
 
-      let loadedCount = 0
-
-      // Load settings from context data
-      const settingsToLoad = [
-        'google_oauth_client_id',
-        'bigquery_example_looker_model_name',
-        'cloud_run_service_url',
-        'vertex_model',
-        'external_oauth_connection_id'
-      ]
-
-      settingsToLoad.forEach(settingKey => {
-        if (contextData && contextData[settingKey] && settings[settingKey]) {
-          dispatch(setSetting({ id: settingKey, value: contextData[settingKey] }))
-          loadedCount++
-          CONTEXT_DEBUG && console.log(`Loaded setting from context: ${settingKey} = ${contextData[settingKey]}`)
-        }
-      })
-
-      CONTEXT_DEBUG && console.log(`Successfully loaded ${loadedCount} settings from extension context`)
+      // Note: Settings now come from environment variables, not extension context
+      CONTEXT_DEBUG && console.log('Extension context loaded successfully (settings now from environment)')
       
-      // Mark context as loaded (reusing the existing flag name for consistency)
+      // Mark context as loaded
       dispatch(setUserAttributesLoaded(true))
       
     } catch (error) {
@@ -76,28 +57,9 @@ export const useExtensionContext = () => {
   }
 
   const saveExtensionContext = async (settingsToSave: Record<string, any>) => {
-    if (!extensionSDK) {
-      throw new Error('Extension SDK not available')
-    }
-
-    try {
-      CONTEXT_DEBUG && console.log('Saving settings to extension context:', settingsToSave)
-      
-      // Get current context data
-      let contextData = await extensionSDK.getContextData() || {}
-      
-      // Update with new settings
-      contextData = { ...contextData, ...settingsToSave }
-      
-      // Save back to extension context
-      await extensionSDK.saveContextData(contextData)
-      
-      CONTEXT_DEBUG && console.log('Successfully saved to extension context')
-      return true
-    } catch (error) {
-      console.error('Error saving to extension context:', error)
-      throw error
-    }
+    // Settings are now read-only from environment variables
+    CONTEXT_DEBUG && console.log('Settings save requested but ignored (settings now from environment):', settingsToSave)
+    return true // Return success to maintain interface compatibility
   }
 
   // Load extension context on mount

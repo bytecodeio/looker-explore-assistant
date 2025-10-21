@@ -6,7 +6,7 @@
 set -e  # Exit on any error
 
 # Configuration variables - should match your existing deployment
-PROJECT_ID="explore-assistant-cf-mis"  # Updated for new GCP project
+PROJECT_ID="ml-accelerator-dbarr"  # Updated for new GCP project
 REGION="us-central1"  # Replace with your preferred region
 SERVICE_NAME="ea-demo-backend"  # New unique service name
 IMAGE_NAME="ea-demo-backend"  # Match image name to service for clarity

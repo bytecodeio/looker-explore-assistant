@@ -3,33 +3,32 @@ import { useSelector } from 'react-redux'
 import { RootState } from '../store'
 import { AssistantState } from '../slices/assistantSlice'
 import { ExtensionContext } from '@looker/extension-sdk-react'
+import { appConfig } from '../config'
 
 const useSendCloudRunMessage = () => {
   const { extensionSDK } = useContext(ExtensionContext)
-  const { settings, examples, semanticModels, currentExploreThread, history, selectedArea, selectedExplores, availableAreas } = useSelector(
+  const { examples, semanticModels, currentExploreThread, history, selectedArea, selectedExplores, availableAreas } = useSelector(
     (state: RootState) => state.assistant as AssistantState,
   )
   
-  // Cloud Run service settings
-  const CLOUD_RUN_URL = settings['cloud_run_service_url']?.value as string || ''
-  const identityToken = settings['identity_token']?.value as string || ''
-  const vertexModel = settings['vertex_model']?.value as string || 'gemini-2.0-flash'
+  // Cloud Run service settings from configuration
+  const CLOUD_RUN_URL = appConfig.cloudRunServiceUrl
+  const apiKey = appConfig.apiKey
+  const vertexModel = appConfig.vertexModel
 
   const callCloudRunAPI = async (payload: any) => {
     if (!CLOUD_RUN_URL) {
       throw new Error('Cloud Run service URL not configured')
     }
 
-    if (!identityToken) {
-      throw new Error('Identity token not available')
+    if (!apiKey) {
+      throw new Error('API key not available')
     }
 
     // Use REST API endpoint instead of root endpoint
     const restApiUrl = `${CLOUD_RUN_URL}/api/v1/query`
-    console.log('Making request to REST API endpoint using Identity token...')
-    console.log('Request URL:', restApiUrl)
-
-    // Always include required fields in the request body
+        console.log('Making request to REST API endpoint using API key...')
+        console.log('Request URL:', restApiUrl)    // Always include required fields in the request body
     const requestBody = {
       query: payload.prompt,
       restricted_explore_keys: payload.restricted_explore_keys,
@@ -52,7 +51,7 @@ const useSendCloudRunMessage = () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${identityToken}`,
+            'Authorization': `Bearer ${apiKey}`,
           },
           body: JSON.stringify(requestBody),
         })
@@ -137,7 +136,7 @@ const useSendCloudRunMessage = () => {
         throw error
       }
     },
-    [examples, semanticModels, CLOUD_RUN_URL, identityToken, currentExploreThread, history, selectedExplores, availableAreas],
+    [examples, semanticModels, CLOUD_RUN_URL, apiKey, currentExploreThread, history, selectedExplores, availableAreas],
   )
 
   // Test function for Cloud Run settings
@@ -156,8 +155,8 @@ const useSendCloudRunMessage = () => {
         testInFlight.current = false
         return false
       }
-      if (!identityToken) {
-        console.log('Cloud Run test failed: No Identity token available')
+      if (!apiKey) {
+        console.log('Cloud Run test failed: No API key available')
         testInFlight.current = false
         return false
       }
@@ -170,7 +169,7 @@ const useSendCloudRunMessage = () => {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${identityToken}`
+            'Authorization': `Bearer ${apiKey}`
           }
         })
         
@@ -191,7 +190,7 @@ const useSendCloudRunMessage = () => {
     } finally {
       testInFlight.current = false
     }
-  }, [CLOUD_RUN_URL, identityToken, extensionSDK])
+  }, [CLOUD_RUN_URL, apiKey, extensionSDK])
 
   return {
     processPrompt,

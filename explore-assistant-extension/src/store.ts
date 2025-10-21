@@ -5,7 +5,6 @@ import { combineReducers } from 'redux'
 import assistantReducer, {
   AssistantState,
   initialState,
-  Settings,
 } from './slices/assistantSlice'
 
 
@@ -16,8 +15,7 @@ const neverPersistKeys: (keyof AssistantState)[] = [
   'isBigQueryMetadataLoaded',
   'isSemanticModelLoaded',
   'currentExploreThread',
-  'isChatMode',
-  'oauth', // Never persist OAuth state - should be fresh on each session
+  'isChatMode'
 ]
 
 // Create a transform function to filter out specific keys
@@ -31,16 +29,6 @@ const filterTransform = createTransform(
         delete newState[key]
       })
 
-      // Only keep settings that exist in the initial state
-      const persistedSettings: Partial<Settings> = {}
-      Object.keys(newState.settings).forEach((settingKey) => {
-        if (settingKey in initialState.settings) {
-          persistedSettings[settingKey] = newState.settings[settingKey]
-        }
-      })
-
-      newState.settings = persistedSettings as Settings
-
       return newState
     }
     return inboundState
@@ -50,12 +38,6 @@ const filterTransform = createTransform(
     if (key === 'assistant') {
       const persistedState = outboundState as Partial<AssistantState>
       const mergedState = { ...initialState, ...persistedState }
-
-      // Ensure all settings from initial state are present
-      mergedState.settings = {
-        ...initialState.settings,
-        ...mergedState.settings,
-      }
 
       return mergedState
     }

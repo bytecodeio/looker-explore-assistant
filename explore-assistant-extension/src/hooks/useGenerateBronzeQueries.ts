@@ -1,8 +1,6 @@
 import { useContext, useCallback } from 'react'
 import { ExtensionContext } from '@looker/extension-sdk-react'
-import { useSelector } from 'react-redux'
-import { RootState } from '../store'
-import { AssistantState } from '../slices/assistantSlice'
+import { appConfig } from '../config'
 
 interface GenerateBronzeQueriesResponse {
   success: boolean
@@ -12,12 +10,10 @@ interface GenerateBronzeQueriesResponse {
 
 const useGenerateBronzeQueries = () => {
   const { extensionSDK } = useContext(ExtensionContext)
-  const { settings } = useSelector(
-    (state: RootState) => state.assistant as AssistantState,
-  )
+  // Remove settings from selector - using configuration instead
   
-  const CLOUD_RUN_URL = settings['cloud_run_service_url']?.value as string || ''
-  const identityToken = settings['identity_token']?.value as string || ''
+  const CLOUD_RUN_URL = appConfig.cloudRunServiceUrl
+  const identityToken = '' // TODO: Implement proper identity token retrieval
 
   const generateBronzeQueries = useCallback(async (exploreKey: string): Promise<GenerateBronzeQueriesResponse> => {
     if (!CLOUD_RUN_URL) {

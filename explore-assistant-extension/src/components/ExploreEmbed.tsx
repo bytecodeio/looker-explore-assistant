@@ -34,6 +34,7 @@ import { ExploreHelper } from '../utils/ExploreHelper'
 import { ExploreParams } from '../slices/assistantSlice'
 import { useCheckForConnectionFailure } from '../hooks/useCheckForConnectionFailure'
 import objectHash from 'object-hash'
+import { appConfig } from '../config'
 
 export interface ExploreEmbedProps {
   modelName: string | null | undefined
@@ -58,7 +59,7 @@ export const ExploreEmbed = ({
 
   const { extensionSDK } = useContext(ExtensionContext)
   const [exploreRunStart, setExploreRunStart] = React.useState(false)
-  const { settings } = useSelector((state: RootState) => state.assistant)
+  // Removed settings selector - using configuration instead
 
   // Initialize connection failure detection hook
   const {
@@ -134,7 +135,7 @@ export const ExploreEmbed = ({
       toggle: 'pik,vis,dat',
     }
 
-    if (settings['show_explore_data'].value) {
+    if (appConfig.showExploreData) {
       paramsObj['toggle'] = 'pik,vis'
     }
 
@@ -203,7 +204,6 @@ export const ExploreEmbed = ({
     exploreParams,
     modelName,
     exploreId,
-    settings,
     handleError,
     handleConnectionSuccess,
     setConnecting,

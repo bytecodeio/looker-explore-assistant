@@ -1,7 +1,6 @@
 import React from 'react'
 import { IconButton, Tooltip } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
-import SettingsIcon from '@mui/icons-material/Settings'
 import AddIcon from '@mui/icons-material/Add'
 import ChatBubbleOutline from '@mui/icons-material/ChatBubbleOutline'
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium'
@@ -19,7 +18,6 @@ import {
   AssistantState,
 } from '../../slices/assistantSlice'
 import { RootState } from '../../store'
-import SettingsModal from './Settings'
 
 interface SidebarProps {
   expanded: boolean
@@ -30,7 +28,6 @@ const Sidebar = ({ expanded, toggleDrawer }: SidebarProps) => {
   const dispatch = useDispatch()
   const history = useHistory()
   const [isExpanded, setIsExpanded] = React.useState(expanded)
-  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false)
   const { isChatMode, isQuerying, history: chatHistory } = useSelector(
     (state: RootState) => state.assistant as AssistantState,
   )
@@ -205,28 +202,7 @@ const Sidebar = ({ expanded, toggleDrawer }: SidebarProps) => {
             </div>
           </div>
         </Tooltip>
-        <Tooltip title={expanded ? '' : 'Settings'} placement="top" arrow>
-          <div
-            className={`mr-2 flex flex-row text-gray-400 items-center cursor-pointer p-2 transition-all duration-300 ease-in-out`}
-            onClick={() => setIsSettingsOpen(true)}
-          >
-            <SettingsIcon />
-            <div
-              className={`
-                   whitespace-nowrap transition-all duration-300 ease-in-out
-                  ${isExpanded ? 'mx-3 opacity-100' : 'opacity-0'}
-                  
-                  `}
-            >
-              {isExpanded && 'Settings'}
-            </div>
-          </div>
-        </Tooltip>
       </div>
-      <SettingsModal
-        open={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
     </div>
   )
 }

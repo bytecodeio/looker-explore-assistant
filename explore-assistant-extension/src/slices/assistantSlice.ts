@@ -11,15 +11,7 @@ export interface ExploreParams {
 
 }
 
-export interface Setting {
-  name: string
-  description: string
-  value: string | boolean // Update to allow string values
-}
-
-export interface Settings {
-  [key: string]: Setting
-}
+// Settings interfaces removed - configuration now comes from environment variables
 
 export interface ExploreSamples {
   [exploreKey: string]: Sample[]
@@ -158,7 +150,6 @@ export interface AssistantState {
     exploreRefinementExamples: RefinementExamples
     exploreSamples: ExploreSamples
   },
-  settings: Settings,
   isBigQueryMetadataLoaded: boolean,
   isSemanticModelLoaded: boolean,
   testsSuccessful: boolean
@@ -167,16 +158,7 @@ export interface AssistantState {
   showConnectionBanner: boolean,
   // User attribute loading state
   userAttributesLoaded: boolean,
-  initialTestsCompleted: boolean,
-  // Initialize OAuth state
-  oauth: {
-    isAuthenticating: boolean
-    lastValidation: number
-    validationInProgress: boolean
-    error: string | null
-    skipAutoAuth: boolean
-    hasValidToken: boolean
-  }
+  initialTestsCompleted: boolean
 }
 
 export const newThreadState = () => {
@@ -220,54 +202,6 @@ export const initialState: AssistantState = {
     exploreRefinementExamples: {},
     exploreSamples: {},
   },
-  settings: {
-    
-    oauth2_token: {
-      name: 'OAuth2 Token',
-      description: 'Google OAuth token used for authenticating Vertex AI requests',
-      value: '',
-    },
-    identity_token: {
-      name: 'Identity Token',
-      description: 'Google Identity token (JWT) for user authentication',
-      value: '',
-    },
-    google_oauth_client_id: {
-      name: 'Google OAuth Client ID',
-      description: 'Client ID for authenticating with Google OAuth',
-      value: '',
-    },
-    bigquery_example_prompts_connection_name: {
-      name: 'BigQuery Example Prompts Connection Name',
-      description: 'The BQ connection name in Looker that has query access to example prompts',
-      value: '',
-    },
-    show_explore_data: {
-      name: 'Show Explore Data',
-      description: 'By default, expand the data panel in the Explore',
-      value: false,
-    },
-    bigquery_example_looker_model_name: {
-      name: 'BigQuery Example Looker Model Name',
-      description: 'The model name for the lookml model that has access to the examples and samples',
-      value: 'extension_apps',
-    },
-    vertex_model: {
-      name: 'Vertex AI Model',
-      description: 'Vertex AI model to use (e.g., gemini-2.0-flash)',
-      value: 'gemini-2.0-flash',
-    },
-    cloud_run_service_url: {
-      name: 'Cloud Run Service URL',
-      description: 'URL of the Cloud Run service for AI processing (use http://localhost:8001 for local testing)',
-      value: '',
-    },
-    external_oauth_connection_id: {
-      name: 'External OAuth Connection ID',
-      description: 'The connection ID for external OAuth authentication in Looker. Can be found using the accounts link and investigating the log in or reauthenticate button hyperlink for an integer at the end of the URL context.',
-      value: '',
-    }
-  },
   isBigQueryMetadataLoaded: false,
   isSemanticModelLoaded: false,
   testsSuccessful: false,
@@ -276,16 +210,7 @@ export const initialState: AssistantState = {
   showConnectionBanner: true,
   // User attribute loading state
   userAttributesLoaded: false,
-  initialTestsCompleted: false,
-  // Initialize OAuth state
-  oauth: {
-    isAuthenticating: false,
-    lastValidation: 0,
-    validationInProgress: false,
-    error: null,
-    skipAutoAuth: false,
-    hasValidToken: false
-  }
+  initialTestsCompleted: false
 }
 
 export const assistantSlice = createSlice({
@@ -304,18 +229,6 @@ export const assistantSlice = createSlice({
     resetChatMode: (state) => {
       state.isChatMode = false
       assistantSlice.caseReducers.resetChat(state)
-    },
-    resetSettings: (state) => {
-      state.settings = initialState.settings
-    },
-    setSetting: (
-      state,
-      action: PayloadAction<{ id: keyof Settings; value: string | boolean }>,
-    ) => {
-      const { id, value } = action.payload
-      if (state.settings[id]) {
-        state.settings[id].value = value
-      }
     },
     openSidePanel: (state) => {
       state.sidePanel.isSidePanelOpen = true
@@ -469,28 +382,6 @@ export const assistantSlice = createSlice({
     setInitialTestsCompleted: (state, action: PayloadAction<boolean>) => {
       state.initialTestsCompleted = action.payload
     },
-    // OAuth state management actions
-    setOAuthAuthenticating: (state, action: PayloadAction<boolean>) => {
-      state.oauth.isAuthenticating = action.payload
-    },
-    setOAuthValidationInProgress: (state, action: PayloadAction<boolean>) => {
-      state.oauth.validationInProgress = action.payload
-    },
-    setOAuthLastValidation: (state, action: PayloadAction<number>) => {
-      state.oauth.lastValidation = action.payload
-    },
-    setOAuthError: (state, action: PayloadAction<string | null>) => {
-      state.oauth.error = action.payload
-    },
-    setOAuthSkipAutoAuth: (state, action: PayloadAction<boolean>) => {
-      state.oauth.skipAutoAuth = action.payload
-    },
-    setOAuthHasValidToken: (state, action: PayloadAction<boolean>) => {
-      state.oauth.hasValidToken = action.payload
-    },
-    resetOAuthState: (state) => {
-      state.oauth = initialState.oauth
-    },
     ensureValidExploreContext: (state) => {
       // If we don't have a valid explore context, try to set one from available samples
       if (!state.currentExplore.exploreKey || !state.currentExplore.modelName || !state.currentExplore.exploreId) {
@@ -545,9 +436,6 @@ export const {
   closeSidePanel,
   setSidePanelExploreParams,
 
-  setSetting,
-  resetSettings,
-
   updateSummaryMessage,
 
   setCurrenExplore,
@@ -560,15 +448,6 @@ export const {
   // User attribute loading actions
   setUserAttributesLoaded,
   setInitialTestsCompleted,
-
-  // OAuth state management actions
-  setOAuthAuthenticating,
-  setOAuthValidationInProgress,
-  setOAuthLastValidation,
-  setOAuthError,
-  setOAuthSkipAutoAuth,
-  setOAuthHasValidToken,
-  resetOAuthState,
   ensureValidExploreContext,
 
   // Area selection actions

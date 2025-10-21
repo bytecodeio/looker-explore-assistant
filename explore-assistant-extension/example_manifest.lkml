@@ -11,6 +11,5 @@ application: explore_assistant_cf_mis {
     new_window_external_urls: ["https://developers.generativeai.google/*","https://bytecodeef.looker.com/*"]
     local_storage: yes
     external_api_urls: ["https://ea-demo-backend-63299712962.us-central1.run.app"]
-    oauth2_urls: ["https://accounts.google.com/o/oauth2/v2/auth"]
   }
 }
