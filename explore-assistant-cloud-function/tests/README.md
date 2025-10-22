@@ -4,7 +4,7 @@ Comprehensive integration testing framework for the Looker Explore Assistant RES
 
 ## Features
 
-- 🔐 **Authorization Support**: Bearer token authentication with custom headers
+- 🔐 **Authorization Support**: API key authentication with X-API-Key header
 - 🐛 **Debug Mode Integration**: Automatic debug logging with LLM interaction tracking
 - ✅ **Comprehensive Validation**: JSONPath-based field validation with multiple operators
 - 🚀 **Parallel Execution**: Support for both sequential and parallel test execution
@@ -35,18 +35,20 @@ python3 -c "from integration_tests import validate_template_integrity; print(val
 
 ```bash
 # Run comprehensive test suite
-python run_integration_tests.py --token "your-bearer-token" --suite comprehensive
+python run_integration_tests.py --api-key "your-api-key" --suite comprehensive
 
 # Run quick validation suite
-python run_integration_tests.py --token "your-bearer-token" --suite quick --parallel
+python run_integration_tests.py --api-key "your-api-key" --suite quick --parallel
 
 # Custom API URL
-python run_integration_tests.py --token "your-token" --url "https://api.example.com" --suite comprehensive
+python run_integration_tests.py --api-key "your-api-key" --url "https://api.example.com" --suite comprehensive
 
 # Save results to file
-# use the gcloud auth print-identity-token to fetch at runtime
-python run_integration-tests.py --token $(gcloud auth print-identity-token) --output results.json --verbose
-# python run_integration_tests.py --token "your-token" --output results.json --verbose
+python run_integration_tests.py --api-key "your-api-key" --output results.json --verbose
+
+# Use API key from environment variable
+export API_SECRET_KEY="your-api-key"
+python run_integration_tests.py --api-key "$API_SECRET_KEY" --suite quick
 ```
 
 #### Using Configuration File
@@ -61,7 +63,7 @@ python run_integration_tests.py --config integration_tests/example_config.json -
 from tests.integration_tests import TestRunner, create_comprehensive_test_suite
 
 # Create test suite
-suite = create_comprehensive_test_suite("your-bearer-token", "http://localhost:8080")
+suite = create_comprehensive_test_suite("your-api-key", "http://localhost:8080")
 
 # Run tests
 runner = TestRunner()
@@ -121,7 +123,7 @@ from tests.integration_tests import TestCaseBuilder, TestPriority, ValidationOpe
 test_case = (TestCaseBuilder("my_test", "My Custom Test")
     .with_description("Test custom functionality")
     .with_query("my custom query")
-    .with_auth_token("your-token")
+    .with_api_key("your-api-key")
     .with_priority(TestPriority.HIGH)
     .with_tags(["custom", "validation"])
     .expect_success()
@@ -251,9 +253,9 @@ Create custom test configurations with JSON:
   "base_url": "http://localhost:8080",
   "parallel_execution": false,
   "continue_on_failure": true,
-  
+
   "auth": {
-    "bearer_token": "your-token",
+    "api_key": "your-api-key",
     "headers": {"User-Agent": "TestSuite/1.0"}
   },
   
@@ -288,7 +290,7 @@ Create custom test configurations with JSON:
 python run_integration_tests.py [OPTIONS]
 
 Options:
-  -t, --token TEXT        Bearer token for authentication
+  -k, --api-key TEXT     API key for authentication
   -u, --url TEXT         API base URL (default: http://localhost:8080)
   -s, --suite CHOICE     Test suite: comprehensive|quick (default: comprehensive)
   -c, --config PATH      JSON configuration file
@@ -337,7 +339,7 @@ The framework can detect the specific bug mentioned in your example:
 
 ```python
 # Test case that should pass but currently fails
-test_case = create_product_sku_test_case("your-token")
+test_case = create_product_sku_test_case("your-api-key")
 
 # This validation will fail if the bug exists
 validation = create_field_filter_validation(
@@ -370,14 +372,14 @@ criterion = ValidationCriterion(
 ### Custom Test Suites
 
 ```python
-def create_my_test_suite(auth_token: str) -> TestSuite:
+def create_my_test_suite(api_key: str) -> TestSuite:
     suite = TestSuite(
         suite_id="my_custom_suite",
         name="My Custom Test Suite",
         base_url="http://localhost:8080",
-        global_auth=AuthConfig(bearer_token=auth_token)
+        global_auth=AuthConfig(api_key=api_key)
     )
-    
+
     # Add your custom test cases
     suite.add_test_case(my_custom_test_case())
     return suite

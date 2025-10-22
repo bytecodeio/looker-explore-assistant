@@ -1,31 +1,54 @@
 # Looker Explore Assistant
 
-This is an extension or API plugin for Looker that integrates LLM's hosted on Vertex AI into a natural language experience powered by Looker's modeling layer.
+This is an extension or API plugin for Looker that integrates LLMs hosted on Vertex AI into a natural language experience powered by Looker's modeling layer.
 
 ![explore assistant](./static/explore-assistant.gif)
 
 ## Description
 
-The Explore Assistant allows a user to generate a Looker Explore Query via natural language outputted into a visualization. As opposed to writing the raw SQL itself, the LLM is optimized to translate a text input into a Looker explore query. This is important as the LLM does what it's great at, **generative content**, and Looker powers it with all the **underlying data context, metadata and nuances** that come with business data and analytics.
+The Explore Assistant allows users to generate Looker Explore queries via natural language, outputting results into visualizations. Rather than writing raw SQL, the LLM translates text inputs into Looker explore queries. This leverages what LLMs excel at - **generative content** - while Looker provides the **underlying data context, metadata and business logic**.
 
-Additionally, the extension provides:
+### Key Features
 
- - Question History (*this is stored in the browser's localstorage*)
- - Categorized Prompts (*these can be customized by the use cases of your organization*)
- - Cached Explore URL's when clicking from History
- - Structured Logging with Input & Output Token Counts (*enables a workflow of log sink to BQ for cost estimation & tracking*)
- - Flexible Deployment Options
- - Multi-turn
- - Insight Summarization
- - Dynamic Explore Selection
+ - **Natural Language Querying** - Generate Looker queries from plain English
+ - **Question History** - Stored in browser localstorage for easy reference
+ - **Sample Prompts** - Customizable prompts organized by use case
+ - **Structured Logging** - Input & output token counts for cost tracking
+ - **Multi-turn Conversations** - Contextual follow-up questions
+ - **Insight Summarization** - AI-generated insights from query results
+ - **Dynamic Explore Selection** - Automatically chooses the right explore based on query intent
+ - **Vector Search** - Semantic search for fields and metrics using BigQuery Vector Search
+
+## Architecture
+
+The system consists of three main components:
+
+1. **Frontend Extension** - Looker extension built with React and TypeScript
+2. **Backend API** - Python REST API deployed on Google Cloud Run
+3. **Vector Search** - BigQuery Vector Search for semantic field lookup
+
+### Authentication Flow
+
+- Frontend uses **API key authentication** (X-API-Key header)
+- User identity extracted from Looker SDK for audit logging
+- Backend validates API key stored in Google Cloud Secret Manager
+
+### Removed Features
+
+This simplified version has removed:
+- OAuth-based authentication (replaced with API keys)
+- MCP (Model Context Protocol) system
+- Area-based explore organization
+- Embedded explore views within the extension
 
 ## Setup
 
-Please follow these steps in order for a successful installation.
-1. Backend Setup - setup the GCP backend for communicating with the Vertex API [using these instructions.](./explore-assistant-backend/README.md)
-2. Looker Connection - setup a Looker connection to the BigQuery dataset created in step 1 [using these instructions.](https://cloud.google.com/looker/docs/db-config-google-bigquery)
-3. Example generation - generate a list of examples and upload them to BigQuery [using these instructions.](./explore-assistant-examples/README.md)
-4. Frontend Setup - setup Looker Extension Framework Applications [using these instructions.](./explore-assistant-extension/README.md)
+Follow these steps in order for successful installation:
+
+1. **Backend Setup** - Deploy the Cloud Run service and configure Vertex AI [using these instructions](./explore-assistant-backend/README.md)
+2. **API Key Setup** - Generate and configure API keys [using these instructions](./API_KEY_SETUP.md)
+3. **Example Generation** - Generate training examples and upload to BigQuery [using these instructions](./explore-assistant-examples/README.md)
+4. **Frontend Setup** - Build and deploy the Looker extension [using these instructions](./explore-assistant-extension/README.md)
 
 ### Technologies Used
 #### Frontend
